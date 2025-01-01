@@ -4,7 +4,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 
-internal sealed class Server()
+internal sealed class Server
 {
     private static readonly List<TcpListener> _tpcListeners = [];
     private static readonly IPAddress[] _availableIpv4Addresses = Dns.GetHostAddresses(Dns.GetHostName())
@@ -17,6 +17,8 @@ internal sealed class Server()
 
     public void Start()
     {
+        new Thread(UdpDiscoverHandler).Start();
+
         foreach(IPAddress ip in _availableIpv4Addresses)
         {
             int tcpPort = GetRandomTcpPort();
@@ -26,6 +28,52 @@ internal sealed class Server()
             new Thread(() => TcpConnectionHandler(tcpListener)).Start();
 
             Console.WriteLine($"Listening on {ip}:{tcpPort}");
+        }
+    }
+
+    private static void UdpDiscoverHandler()
+    {
+        try
+        {
+            using UdpClient udpClient = new();
+            IPEndPoint localEndPoint = new(IPAddress.Any, Config.UdpDiscoverPort);
+            udpClient.Client.SetSocketOption(
+                SocketOptionLevel.Socket,
+                SocketOptionName.ReuseAddress,
+                true);
+            udpClient.Client.Bind(localEndPoint);
+            udpClient.JoinMulticastGroup(Config.DefaultMulticastIpAddress);
+
+            Console.WriteLine($"Started listening UDP multicast: {udpClient.Client.LocalEndPoint}");
+
+            while (true)
+            {
+                byte[] receivedBytes = udpClient.Receive(ref localEndPoint);
+                string receivedMessage = Encoding.ASCII.GetString(receivedBytes);
+
+                if (receivedMessage.Clear().Equals(Config.DiscoverMessageRequest, StringComparison.CurrentCultureIgnoreCase))
+                {
+                    IEnumerable<string> offerTcpIpAddresses = _tpcListeners.Select((tcpListener, index) => $"{index + 1}. {Config.OfferMessageRequest}: {tcpListener.LocalEndpoint}");
+                    string offerMessage = string.Join(Environment.NewLine, offerTcpIpAddresses);
+                    byte[] offerBytes = Encoding.ASCII.GetBytes(offerMessage);
+
+                    udpClient.Send(offerBytes, offerBytes.Length, localEndPoint);
+
+                    Console.WriteLine($"Sent {Config.OfferMessageRequest} to {localEndPoint.Address}:{localEndPoint.Port}");
+                }
+            }
+        }
+        catch (ObjectDisposedException ode)
+        {
+            PrintErrorMessage("UDP Server error", ode);
+        }
+        catch (SocketException se)
+        {
+            PrintErrorMessage("UDP Socket error", se);
+        }
+        catch (Exception e)
+        {
+            PrintErrorMessage("UDP Server error", e);
         }
     }
 
@@ -53,6 +101,8 @@ internal sealed class Server()
 
             while (receiveMessage.Clear().Equals(Config.TimeMessageRequest, StringComparison.CurrentCultureIgnoreCase))
             {
+                // https://code-maze.com/convert-datetime-to-iso-8601-string-csharp/
+                // https://stackoverflow.com/questions/114983/given-a-datetime-object-how-do-i-get-an\-iso-8601-date-in-string-format
                 string currentTimeIso8601 = DateTime.UtcNow.ToString("o");
                 byte[] sendMessageBytes = Encoding.ASCII.GetBytes(currentTimeIso8601);
 
@@ -65,15 +115,15 @@ internal sealed class Server()
         }
         catch (ObjectDisposedException ode)
         {
-            PrintErrorMessage("Server error", ode);
+            PrintErrorMessage("TCP Server error", ode);
         }
         catch (SocketException se)
         {
-            PrintErrorMessage("Socket error", se);
+            PrintErrorMessage("TCP Socket error", se);
         }
         catch (Exception e)
         {
-            PrintErrorMessage("Server error", e);
+            PrintErrorMessage("TCP Server error", e);
         }
         finally
         {
@@ -82,6 +132,8 @@ internal sealed class Server()
             {
                 _clientStats[remoteEndPoint] = ClientState.Disconnected;
             }
+
+            tcpClient.Close();
         }
     }
 

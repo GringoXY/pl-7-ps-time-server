@@ -1,4 +1,6 @@
-﻿namespace Shared;
+﻿using System.Net;
+
+namespace Shared;
 
 public class Config
 {
@@ -24,4 +26,6 @@ public class Config
     /// Client requests server's time
     /// </summary>
     public const string TimeMessageRequest = "TIME";
+
+    public static readonly IPAddress DefaultMulticastIpAddress = IPAddress.Parse("239.0.0.0");
 }
