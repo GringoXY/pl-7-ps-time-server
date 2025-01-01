@@ -10,13 +10,12 @@ Install [.NET 8](https://dotnet.microsoft.com/en-us/download/dotnet/8.0)
 ## Run program via CLI
 Make sure you conform [Requirements](#requirements) and your CLI points to the root of the repository.
 
-### Run time server
-TODO
+### Run server
 ```terminal
-dotnet run --project src\<path_to_server>
+dotnet run --project src\Server
 ```
 
-### Run client
+### Run client TODO!!!
 ```terminal
 dotnet run --project src\<path_to_client>
 ```
