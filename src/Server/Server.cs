@@ -35,7 +35,13 @@ internal sealed class Server
     {
         try
         {
-            using UdpClient udpClient = new();
+            using UdpClient udpClient = new()
+            {
+                // Based on docs: https://learn.microsoft.com/en-us/dotnet/api/system.net.sockets.socket.exclusiveaddressuse?view=net-8.0
+                // """
+                // Gets or sets a value that indicates whether the Socket allows only one process to bind to a port.
+                ExclusiveAddressUse = false
+            };
             IPEndPoint localEndPoint = new(IPAddress.Any, Config.UdpDiscoverPort);
             udpClient.Client.SetSocketOption(
                 SocketOptionLevel.Socket,
