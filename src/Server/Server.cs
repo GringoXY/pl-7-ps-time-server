@@ -1,25 +1,32 @@
 ﻿using Shared;
 using System.Collections.Concurrent;
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text;
+using System.Text.Json;
 
 internal sealed class Server
 {
     private static readonly List<TcpListener> _tpcListeners = [];
-    private static readonly IPAddress[] _availableIpv4Addresses = Dns.GetHostAddresses(Dns.GetHostName())
-        .Where(ip =>
-            ip.AddressFamily is AddressFamily.InterNetwork
-            && IPAddress.IsLoopback(ip) == false // https://learn.microsoft.com/en-us/dotnet/api/system.net.ipaddress.isloopback?view=net-8.0
-        )
-        .ToArray();
+    // https://stackoverflow.com/questions/9855230/how-do-i-get-the-network-interface-and-its-right-ipv4-address
+    private static readonly IEnumerable<IPAddress> _availableIpAddresses
+        = NetworkInterface.GetAllNetworkInterfaces()
+            .Where(ni => ni.OperationalStatus is OperationalStatus.Up)
+            .Select(ni => ni.GetIPProperties().UnicastAddresses)
+            .SelectMany(u => u)
+            .Where(u =>
+                u.Address.AddressFamily == AddressFamily.InterNetwork
+                && IPAddress.IsLoopback(u.Address) == false
+            ).Select(u => u.Address);
+
     private static readonly ConcurrentDictionary<string, ClientState> _clientStats = [];
 
     public void Start()
     {
         new Thread(UdpDiscoverHandler).Start();
 
-        foreach(IPAddress ip in _availableIpv4Addresses)
+        foreach (IPAddress ip in _availableIpAddresses)
         {
             int tcpPort = GetRandomTcpPort();
             TcpListener tcpListener = new(ip, tcpPort);
@@ -35,22 +42,13 @@ internal sealed class Server
     {
         try
         {
-            using UdpClient udpClient = new()
-            {
-                // Based on docs: https://learn.microsoft.com/en-us/dotnet/api/system.net.sockets.socket.exclusiveaddressuse?view=net-8.0
-                // """
-                // Gets or sets a value that indicates whether the Socket allows only one process to bind to a port.
-                ExclusiveAddressUse = false
-            };
-            IPEndPoint localEndPoint = new(IPAddress.Any, Config.UdpDiscoverPort);
-            udpClient.Client.SetSocketOption(
-                SocketOptionLevel.Socket,
-                SocketOptionName.ReuseAddress,
-                true);
-            udpClient.Client.Bind(localEndPoint);
-            udpClient.JoinMulticastGroup(Config.DefaultMulticastIpAddress);
+            UdpClient udpClient = new();
+            udpClient.JoinMulticastGroup(Config.MulticastGroupIpAddress);
 
-            Console.WriteLine($"Started listening UDP multicast: {udpClient.Client.LocalEndPoint}");
+            IPEndPoint localEndPoint = new(IPAddress.Any, Config.UdpDiscoverPort);
+            udpClient.Client.Bind(localEndPoint);
+
+            Console.WriteLine($"Started listening UDP multicast DISCOVER: {udpClient.Client.LocalEndPoint}");
 
             while (true)
             {
@@ -59,27 +57,30 @@ internal sealed class Server
 
                 if (receivedMessage.Clear().Equals(Config.DiscoverMessageRequest, StringComparison.CurrentCultureIgnoreCase))
                 {
-                    IEnumerable<string> offerTcpIpAddresses = _tpcListeners.Select((tcpListener, index) => $"{index + 1}. {Config.OfferMessageRequest}: {tcpListener.LocalEndpoint}");
-                    string offerMessage = string.Join(Environment.NewLine, offerTcpIpAddresses);
+                    OfferIPAddress[] offerIpAddresses = _availableIpAddresses.Select((ipAddress, index) =>
+                        new OfferIPAddress(ipAddress.ToString())
+                    ).ToArray();
+
+                    string offerMessage = $"{Config.OfferMessageRequest}{JsonSerializer.Serialize(offerIpAddresses)}";
                     byte[] offerBytes = Encoding.ASCII.GetBytes(offerMessage);
 
                     udpClient.Send(offerBytes, offerBytes.Length, localEndPoint);
 
-                    Console.WriteLine($"Sent {Config.OfferMessageRequest} to {localEndPoint.Address}:{localEndPoint.Port}");
+                    Console.WriteLine($"Sent {Config.OfferMessageRequest} to {udpClient.Client.LocalEndPoint}");
                 }
             }
         }
         catch (ObjectDisposedException ode)
         {
-            PrintErrorMessage("UDP Server error", ode);
+            PrintErrorMessage($"{nameof(UdpDiscoverHandler)} Server error", ode);
         }
         catch (SocketException se)
         {
-            PrintErrorMessage("UDP Socket error", se);
+            PrintErrorMessage($"{nameof(UdpDiscoverHandler)} Socket error", se);
         }
         catch (Exception e)
         {
-            PrintErrorMessage("UDP Server error", e);
+            PrintErrorMessage($"{nameof(UdpDiscoverHandler)} Server error", e);
         }
     }
 
@@ -104,11 +105,11 @@ internal sealed class Server
         }
         catch (SocketException se)
         {
-            PrintErrorMessage($"{nameof(TcpConnectionHandler)}  Socket error", se);
+            PrintErrorMessage($"{nameof(TcpConnectionHandler)} Socket error", se);
         }
         catch (Exception e)
         {
-            PrintErrorMessage($"{nameof(TcpConnectionHandler)}  Server error", e);
+            PrintErrorMessage($"{nameof(TcpConnectionHandler)} Server error", e);
         }
     }
 
@@ -136,15 +137,15 @@ internal sealed class Server
         }
         catch (ObjectDisposedException ode)
         {
-            PrintErrorMessage("TCP Server error", ode);
+            PrintErrorMessage($"{nameof(TcpClientHandler)} Server error", ode);
         }
         catch (SocketException se)
         {
-            PrintErrorMessage("TCP Socket error", se);
+            PrintErrorMessage($"{nameof(TcpClientHandler)} Socket error", se);
         }
         catch (Exception e)
         {
-            PrintErrorMessage("TCP Server error", e);
+            PrintErrorMessage($"{nameof(TcpClientHandler)} Server error", e);
         }
         finally
         {
@@ -174,5 +175,6 @@ internal sealed class Server
         {
             Console.WriteLine($"Wyjątek wewnętrzny: {exception.InnerException?.Message}");
         }
+        Console.ForegroundColor = ConsoleColor.Gray;
     }
 }
