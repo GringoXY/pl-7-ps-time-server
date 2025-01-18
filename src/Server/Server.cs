@@ -85,15 +85,30 @@ internal sealed class Server
 
     private static void TcpConnectionHandler(TcpListener tcpListener)
     {
-        tcpListener.Start();
-
-        while (true)
+        try
         {
-            TcpClient client = tcpListener.AcceptTcpClient();
-            EndPoint? clientRemoteEndPoint = client.Client.RemoteEndPoint;
-            Console.WriteLine($"Client connected {clientRemoteEndPoint}");
-            _clientStats.TryAdd(client.Client.RemoteEndPoint?.ToString(), ClientState.Connected);
-            new Thread(() => TcpClientHandler(client)).Start();
+            tcpListener.Start();
+
+            while (true)
+            {
+                TcpClient client = tcpListener.AcceptTcpClient();
+                EndPoint? clientRemoteEndPoint = client.Client.RemoteEndPoint;
+                Console.WriteLine($"Client connected {clientRemoteEndPoint}");
+                _clientStats.TryAdd(client.Client.RemoteEndPoint?.ToString(), ClientState.Connected);
+                new Thread(() => TcpClientHandler(client)).Start();
+            }
+        }
+        catch (ObjectDisposedException ode)
+        {
+            PrintErrorMessage($"{nameof(TcpConnectionHandler)} Server error", ode);
+        }
+        catch (SocketException se)
+        {
+            PrintErrorMessage($"{nameof(TcpConnectionHandler)}  Socket error", se);
+        }
+        catch (Exception e)
+        {
+            PrintErrorMessage($"{nameof(TcpConnectionHandler)}  Server error", e);
         }
     }
 
