@@ -2,7 +2,7 @@
 
 namespace Shared;
 
-public class Config
+public static class Config
 {
     public const int MinTcpPort = 1024;
     public const int MaxTcpPort = 65535;
@@ -13,17 +13,17 @@ public class Config
     public const int UdpDiscoverPort = 7;
 
     /// <summary>
-    /// Client requests list of IP addresses (<see cref="OfferMessageRequest"/> or more)
+    /// Command/request name for client requesting list of IP addresses (<see cref="OfferMessageRequest"/> for more)
     /// </summary>
     public const string DiscoverMessageRequest = "DISCOVER";
 
     /// <summary>
-    /// Server offers list of available IP addresses (v4 only)
+    /// Command/request name for the server offering list of available IP addresses (v4 only)
     /// </summary>
     public const string OfferMessageRequest = "OFFER";
 
     /// <summary>
-    /// Client requests server's time
+    /// Command/request name for the client when he requests server's time
     /// </summary>
     public const string TimeMessageRequest = "TIME";
 
