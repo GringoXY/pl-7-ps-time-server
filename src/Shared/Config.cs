@@ -22,10 +22,15 @@ public static class Config
     /// </summary>
     public const string OfferMessageRequest = "OFFER";
 
+    public const string OfferMessageElementsSeperator = ";";
+    public const string OfferMessageRowsSeperator = "|";
+
     /// <summary>
     /// Command/request name for the client when he requests server's time
     /// </summary>
     public const string TimeMessageRequest = "TIME";
 
-    public static readonly IPAddress DefaultMulticastIpAddress = IPAddress.Parse("239.0.0.0");
+    public static readonly IPAddress MulticastGroupIpAddress = IPAddress.Parse("239.0.0.0");
+
+    public const int UdpDiscoverSleepRequestInMilliseconds = 10_000;
 }
