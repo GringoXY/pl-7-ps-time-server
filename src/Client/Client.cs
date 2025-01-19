@@ -95,9 +95,10 @@ internal sealed class Client
         {
             while (true)
             {
-                if (_tcpClient.Connected) { }
-                // Preventing overusage of the CPU
-                Thread.Sleep(10000);
+                if (_tcpClient.Connected)
+                {
+                    
+                }
             }
         }
         catch (ObjectDisposedException ode)

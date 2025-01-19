@@ -22,9 +22,6 @@ public static class Config
     /// </summary>
     public const string OfferMessageRequest = "OFFER";
 
-    public const string OfferMessageElementsSeperator = ";";
-    public const string OfferMessageRowsSeperator = "|";
-
     /// <summary>
     /// Command/request name for the client when he requests server's time
     /// </summary>
@@ -32,5 +29,9 @@ public static class Config
 
     public static readonly IPAddress MulticastGroupIpAddress = IPAddress.Parse("239.0.0.0");
 
-    public const int UdpDiscoverSleepRequestInMilliseconds = 2_000;
+    /// <summary>
+    /// Sleep in milliseconds only for UDP <see cref="DiscoverMessageRequest"/> requests
+    /// in order to lower CPU usage.
+    /// </summary>
+    public const int UdpDiscoverSleepRequestInMilliseconds = 10_000;
 }
