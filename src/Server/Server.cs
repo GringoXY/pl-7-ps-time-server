@@ -42,13 +42,17 @@ internal sealed class Server
     {
         try
         {
-            UdpClient udpClient = new();
+            UdpClient udpClient = new()
+            {
+                // Prevents the case when datagram is missed on switch/router
+                Ttl = 2
+            };
             udpClient.JoinMulticastGroup(Config.MulticastGroupIpAddress);
 
             IPEndPoint localEndPoint = new(IPAddress.Any, Config.UdpDiscoverPort);
             udpClient.Client.Bind(localEndPoint);
 
-            Console.WriteLine($"Started listening UDP multicast DISCOVER: {udpClient.Client.LocalEndPoint}");
+            Console.WriteLine($"Started listening UDP multicast {Config.DiscoverMessageRequest}: {udpClient.Client.LocalEndPoint}");
 
             while (true)
             {
@@ -57,9 +61,11 @@ internal sealed class Server
 
                 if (receivedMessage.Clear().Equals(Config.DiscoverMessageRequest, StringComparison.CurrentCultureIgnoreCase))
                 {
-                    OfferIPAddress[] offerIpAddresses = _availableIpAddresses.Select((ipAddress, index) =>
-                        new OfferIPAddress(ipAddress.ToString())
-                    ).ToArray();
+                    OfferIPAddress[] offerIpAddresses = _tpcListeners.Select(tcpListener =>
+                    {
+                        IPEndPoint ipEndPoint = (IPEndPoint)tcpListener.LocalEndpoint;
+                        return new OfferIPAddress(ipEndPoint.Address.ToString(), ipEndPoint.Port);
+                    }).ToArray();
 
                     string offerMessage = $"{Config.OfferMessageRequest}{JsonSerializer.Serialize(offerIpAddresses)}";
                     byte[] offerBytes = Encoding.ASCII.GetBytes(offerMessage);

@@ -32,5 +32,5 @@ public static class Config
 
     public static readonly IPAddress MulticastGroupIpAddress = IPAddress.Parse("239.0.0.0");
 
-    public const int UdpDiscoverSleepRequestInMilliseconds = 10_000;
+    public const int UdpDiscoverSleepRequestInMilliseconds = 2_000;
 }
