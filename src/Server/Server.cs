@@ -5,6 +5,7 @@ using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 
 internal sealed class Server
 {
@@ -129,13 +130,11 @@ internal sealed class Server
 
             while (receiveMessage.Clear().Equals(Config.TimeMessageRequest, StringComparison.CurrentCultureIgnoreCase))
             {
-                // https://code-maze.com/convert-datetime-to-iso-8601-string-csharp/
-                // https://stackoverflow.com/questions/114983/given-a-datetime-object-how-do-i-get-an\-iso-8601-date-in-string-format
-                string currentTimeIso8601 = DateTime.UtcNow.ToString("o");
-                byte[] sendMessageBytes = Encoding.ASCII.GetBytes(currentTimeIso8601);
+                long milliseconds = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                byte[] sendMessageBytes = Encoding.ASCII.GetBytes(milliseconds.ToString());
 
                 tcpClient.Client.Send(sendMessageBytes);
-                Console.WriteLine($"Sent time: {currentTimeIso8601} to client: {tcpClient.Client.RemoteEndPoint}");
+                Console.WriteLine($"Sent time: {DateTimeOffset.FromUnixTimeMilliseconds(milliseconds)} ({milliseconds}ms) to client: {tcpClient.Client.RemoteEndPoint}");
 
                 bytesReceive = tcpClient.Client.Receive(buffer);
                 receiveMessage = Encoding.ASCII.GetString(buffer, 0, bytesReceive);

@@ -34,4 +34,28 @@ public static class Config
     /// in order to lower CPU usage.
     /// </summary>
     public const int UdpDiscoverSleepRequestInMilliseconds = 10_000;
+
+    /// <summary>
+    /// Sleep in milliseconds only for UDP <see cref="DiscoverMessageRequest"/> requests
+    /// in order to lower CPU usage.
+    /// </summary>
+    public const int UdpDiscoverTimeoutRequestInMilliseconds = 10_000;
+
+    /// <summary>
+    /// Sleep in milliseconds only for TCP <see cref="TimeMessageRequest"/> requests
+    /// in order to lower CPU usage.
+    /// </summary>
+    public const int TcpTimeRequestTimeoutInMilliseconds = 10_000;
+
+    /// <summary>
+    /// Min sleep in milliseconds only for TCP <see cref="TimeMessageRequest"/> requests
+    /// in order to lower CPU usage.
+    /// </summary>
+    public const int MinTcpTimeRequestFrequencyInMilliseconds = 10;
+
+    /// <summary>
+    /// Max sleep in milliseconds only for TCP <see cref="TimeMessageRequest"/> requests
+    /// in order to lower CPU usage.
+    /// </summary>
+    public const int MaxTcpTimeRequestFrequencyInMilliseconds = 1_000;
 }

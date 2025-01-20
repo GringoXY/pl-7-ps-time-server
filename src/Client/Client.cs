@@ -7,6 +7,7 @@ internal sealed class Client
 {
     private static OfferIPAddress _previousIpAddress;
     private static TcpClient _tcpClient;
+    private static int? _timeTcpRequestFrequencyInMilliseconds = null;
 
     public void Start()
     {
@@ -23,7 +24,7 @@ internal sealed class Client
                 ExclusiveAddressUse = false,
                 Client =
                 {
-                    ReceiveTimeout = Config.UdpDiscoverSleepRequestInMilliseconds,
+                    ReceiveTimeout = Config.UdpDiscoverTimeoutRequestInMilliseconds,
                 },
                 // Prevents the case when datagram is missed on switch/router
                 Ttl = 2
@@ -63,11 +64,44 @@ internal sealed class Client
                             Console.Write($"Invalid choice... Choose IP address (1-{offerIpAddresses.Length}): ");
                         }
 
-                        OfferIPAddress chosenIpAddress = offerIpAddresses[listPoint - 1];
-                        _previousIpAddress = chosenIpAddress;
-                        _tcpClient = new(chosenIpAddress.IPAddress, chosenIpAddress.Port);
-
                         Console.Clear();
+                        OfferIPAddress chosenIpAddress = offerIpAddresses[listPoint - 1];
+
+                        try
+                        {
+                            // May throw exception on connection attempt
+                            _tcpClient = new(chosenIpAddress.IPAddress, chosenIpAddress.Port)
+                            {
+                                SendTimeout = Config.TcpTimeRequestTimeoutInMilliseconds
+                            };
+                            _previousIpAddress = chosenIpAddress;
+
+                            Console.Write($"Provide time request frequency in ms (10-1000): ");
+
+                            int requestFrequency = 0;
+                            while (
+                                int.TryParse(Console.ReadLine(), out requestFrequency) == false
+                                || requestFrequency < Config.MinTcpTimeRequestFrequencyInMilliseconds
+                                || requestFrequency > Config.MaxTcpTimeRequestFrequencyInMilliseconds
+                            )
+                            {
+                                Console.Write($"Invalid timeout... Provide time request frequency in ms (10-1000): ");
+                            }
+
+                            _timeTcpRequestFrequencyInMilliseconds = requestFrequency;
+                        }
+                        catch (ObjectDisposedException ode)
+                        {
+                            PrintErrorMessage($"{nameof(UdpDiscoverHandler)} TCP Client error", ode);
+                        }
+                        catch (SocketException se)
+                        {
+                            PrintErrorMessage($"{nameof(UdpDiscoverHandler)} TCP Socket error", se);
+                        }
+                        catch (Exception e)
+                        {
+                            PrintErrorMessage($"{nameof(UdpDiscoverHandler)} TCP Client error", e);
+                        }
                     }
                 }
 
@@ -95,10 +129,38 @@ internal sealed class Client
         {
             while (true)
             {
-                if (_tcpClient.Connected)
+                if (_tcpClient?.Connected is true && _timeTcpRequestFrequencyInMilliseconds is not null)
                 {
-                    
+                    // 1. Get current client time
+                    long t1 = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+                    // 2. Send "TIME" TCP request to get server's time
+                    byte[] serverTimeRequest = Encoding.ASCII.GetBytes(Config.TimeMessageRequest);
+                    _tcpClient.Client.Send(serverTimeRequest);
+
+                    byte[] buffer = new byte[256];
+                    int receiveServerResponseBytes = _tcpClient.Client.Receive(buffer);
+                    string serverUnixTimeInMilliseconds = Encoding.ASCII.GetString(buffer, 0, receiveServerResponseBytes);
+
+                    if (long.TryParse(serverUnixTimeInMilliseconds, out long tServ))
+                    {
+                        long t2 = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                        long tCli = t2;
+
+                        long delta = tServ + ((t2 - t1) / 2) - tCli;
+                        long calculatedCurrentServerTime = tCli + delta;
+                        DateTimeOffset currentIso8601 = DateTimeOffset.FromUnixTimeMilliseconds(calculatedCurrentServerTime);
+                        Console.WriteLine($"{currentIso8601:O} | delta={delta}ms");
+                    }
+                    else
+                    {
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine("");
+                        Console.ForegroundColor = ConsoleColor.Gray;
+                    }
                 }
+
+                Thread.Sleep(_timeTcpRequestFrequencyInMilliseconds ?? 1_000);
             }
         }
         catch (ObjectDisposedException ode)
@@ -112,6 +174,10 @@ internal sealed class Client
         catch (Exception e)
         {
             PrintErrorMessage($"{nameof(TcpTimeHandler)} Client error", e);
+        }
+        finally
+        {
+            _tcpClient?.Close();
         }
     }
 
