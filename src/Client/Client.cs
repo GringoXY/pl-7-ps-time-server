@@ -1,6 +1,5 @@
 ﻿using Shared;
 using System.Net;
-using System.Net.Http;
 using System.Net.Sockets;
 using System.Text;
 
@@ -20,15 +19,13 @@ internal sealed class Client
     {
         try
         {
-            UdpClient udpClient = new()
+            using UdpClient udpClient = new()
             {
                 ExclusiveAddressUse = false,
                 Client =
                 {
                     ReceiveTimeout = Config.UdpDiscoverTimeoutRequestInMilliseconds,
                 },
-                // Prevents the case when datagram is missed on switch/router
-                Ttl = 2
             };
             udpClient.JoinMulticastGroup(Config.MulticastGroupIpAddress, Config.UdpDiscoverPort);
             IPEndPoint multicastEndPoint = new(Config.MulticastGroupIpAddress, Config.UdpDiscoverPort);
@@ -132,10 +129,10 @@ internal sealed class Client
             {
                 if (_tcpClient?.Connected is true && _timeTcpRequestFrequencyInMilliseconds is not null)
                 {
-                    // 1. Get current client time
-                    long t1 = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                    // 1. Get current client time [ms]
+                    long currentClientTime1 = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
-                    // 2. Send "TIME" TCP request to get server's time
+                    // 2. Send "TIME" TCP request to get server's time [ms]
                     byte[] serverTimeRequest = Encoding.ASCII.GetBytes(Config.TimeMessageRequest);
                     _tcpClient.Client.Send(serverTimeRequest);
 
@@ -143,20 +140,22 @@ internal sealed class Client
                     int receiveServerResponseBytes = _tcpClient.Client.Receive(buffer);
                     string serverUnixTimeInMilliseconds = Encoding.ASCII.GetString(buffer, 0, receiveServerResponseBytes);
 
-                    if (long.TryParse(serverUnixTimeInMilliseconds, out long tServ))
+                    if (long.TryParse(serverUnixTimeInMilliseconds, out long serverTime))
                     {
-                        long t2 = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                        long tCli = t2;
+                        // 3. Save again current client time [ms]
+                        long currentClientTime2 = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                        long clientTime = currentClientTime2;
 
-                        long delta = tServ + ((t2 - t1) / 2) - tCli;
-                        long calculatedCurrentServerTime = tCli + delta;
+                        // 4. Calculating difference between server and client time
+                        long delta = serverTime + ((currentClientTime2 - currentClientTime1) / 2) - clientTime;
+                        long calculatedCurrentServerTime = clientTime + delta;
                         DateTimeOffset currentIso8601 = DateTimeOffset.FromUnixTimeMilliseconds(calculatedCurrentServerTime);
                         Console.WriteLine($"{currentIso8601:O} | delta={delta}ms");
                     }
                     else
                     {
                         Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine("");
+                        Console.WriteLine("Invalid time from server. Should be in milliseconds! Fix the server...");
                         Console.ForegroundColor = ConsoleColor.Gray;
                     }
                 }

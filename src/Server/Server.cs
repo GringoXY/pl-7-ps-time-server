@@ -5,7 +5,6 @@ using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization.Metadata;
 
 internal sealed class Server
 {
@@ -43,21 +42,21 @@ internal sealed class Server
     {
         try
         {
-            UdpClient udpClient = new()
+            using UdpClient udpServer = new()
             {
                 // Prevents the case when datagram is missed on switch/router
-                Ttl = 2
+                Ttl = 2,
             };
-            udpClient.JoinMulticastGroup(Config.MulticastGroupIpAddress);
+            udpServer.JoinMulticastGroup(Config.MulticastGroupIpAddress);
 
             IPEndPoint localEndPoint = new(IPAddress.Any, Config.UdpDiscoverPort);
-            udpClient.Client.Bind(localEndPoint);
+            udpServer.Client.Bind(localEndPoint);
 
-            Console.WriteLine($"Started listening UDP multicast {Config.DiscoverMessageRequest}: {udpClient.Client.LocalEndPoint}");
+            Console.WriteLine($"Started listening UDP multicast {Config.DiscoverMessageRequest}: {udpServer.Client.LocalEndPoint}");
 
             while (true)
             {
-                byte[] receivedBytes = udpClient.Receive(ref localEndPoint);
+                byte[] receivedBytes = udpServer.Receive(ref localEndPoint);
                 string receivedMessage = Encoding.ASCII.GetString(receivedBytes);
 
                 if (receivedMessage.Clear().Equals(Config.DiscoverMessageRequest, StringComparison.CurrentCultureIgnoreCase))
@@ -71,9 +70,9 @@ internal sealed class Server
                     string offerMessage = $"{Config.OfferMessageRequest}{JsonSerializer.Serialize(offerIpAddresses)}";
                     byte[] offerBytes = Encoding.ASCII.GetBytes(offerMessage);
 
-                    udpClient.Send(offerBytes, offerBytes.Length, localEndPoint);
+                    udpServer.Send(offerBytes, offerBytes.Length, localEndPoint);
 
-                    Console.WriteLine($"Sent {Config.OfferMessageRequest} to {udpClient.Client.LocalEndPoint}");
+                    Console.WriteLine($"Sent {Config.OfferMessageRequest} to {udpServer.Client.LocalEndPoint}");
                 }
             }
         }
