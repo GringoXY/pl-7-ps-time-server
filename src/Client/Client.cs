@@ -1,5 +1,6 @@
 ﻿using Shared;
 using System.Net;
+using System.Net.Http;
 using System.Net.Sockets;
 using System.Text;
 
@@ -92,15 +93,15 @@ internal sealed class Client
                         }
                         catch (ObjectDisposedException ode)
                         {
-                            PrintErrorMessage($"{nameof(UdpDiscoverHandler)} TCP Client error", ode);
+                            ode.PrintErrorMessage($"{nameof(UdpDiscoverHandler)} TCP Client error");
                         }
                         catch (SocketException se)
                         {
-                            PrintErrorMessage($"{nameof(UdpDiscoverHandler)} TCP Socket error", se);
+                            se.PrintErrorMessage($"{nameof(UdpDiscoverHandler)} TCP Socket error");
                         }
                         catch (Exception e)
                         {
-                            PrintErrorMessage($"{nameof(UdpDiscoverHandler)} TCP Client error", e);
+                            e.PrintErrorMessage($"{nameof(UdpDiscoverHandler)} TCP Client error");
                         }
                     }
                 }
@@ -111,15 +112,15 @@ internal sealed class Client
         }
         catch (ObjectDisposedException ode)
         {
-            PrintErrorMessage($"{nameof(UdpDiscoverHandler)} Client error", ode);
+            ode.PrintErrorMessage($"{nameof(UdpDiscoverHandler)} Client error");
         }
         catch (SocketException se)
         {
-            PrintErrorMessage($"{nameof(UdpDiscoverHandler)} Socket error", se);
+            se.PrintErrorMessage($"{nameof(UdpDiscoverHandler)} Socket error");
         }
         catch (Exception e)
         {
-            PrintErrorMessage($"{nameof(UdpDiscoverHandler)} Client error", e);
+            e.PrintErrorMessage($"{nameof(UdpDiscoverHandler)} Client error");
         }
     }
 
@@ -165,30 +166,19 @@ internal sealed class Client
         }
         catch (ObjectDisposedException ode)
         {
-            PrintErrorMessage($"{nameof(TcpTimeHandler)} Client error", ode);
+            ode.PrintErrorMessage($"{nameof(TcpTimeHandler)} Client error");
         }
         catch (SocketException se)
         {
-            PrintErrorMessage($"{nameof(TcpTimeHandler)} Socket error", se);
+            se.PrintErrorMessage($"{nameof(TcpTimeHandler)} Socket error");
         }
         catch (Exception e)
         {
-            PrintErrorMessage($"{nameof(TcpTimeHandler)} Client error", e);
+            e.PrintErrorMessage($"{nameof(TcpTimeHandler)} Client error");
         }
         finally
         {
             _tcpClient?.Close();
         }
-    }
-
-    private static void PrintErrorMessage(string baseMessage, Exception exception)
-    {
-        Console.ForegroundColor = ConsoleColor.Red;
-        Console.WriteLine($"{baseMessage}: {exception.Message}");
-        if (exception.InnerException is not null)
-        {
-            Console.WriteLine($"Wyjątek wewnętrzny: {exception.InnerException?.Message}");
-        }
-        Console.ForegroundColor = ConsoleColor.Gray;
     }
 }

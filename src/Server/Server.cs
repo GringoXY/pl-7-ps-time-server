@@ -79,15 +79,15 @@ internal sealed class Server
         }
         catch (ObjectDisposedException ode)
         {
-            PrintErrorMessage($"{nameof(UdpDiscoverHandler)} Server error", ode);
+            ode.PrintErrorMessage($"{nameof(UdpDiscoverHandler)} Server error");
         }
         catch (SocketException se)
         {
-            PrintErrorMessage($"{nameof(UdpDiscoverHandler)} Socket error", se);
+            se.PrintErrorMessage($"{nameof(UdpDiscoverHandler)} Socket error");
         }
         catch (Exception e)
         {
-            PrintErrorMessage($"{nameof(UdpDiscoverHandler)} Server error", e);
+            e.PrintErrorMessage($"{nameof(UdpDiscoverHandler)} Server error");
         }
     }
 
@@ -108,15 +108,15 @@ internal sealed class Server
         }
         catch (ObjectDisposedException ode)
         {
-            PrintErrorMessage($"{nameof(TcpConnectionHandler)} Server error", ode);
+            ode.PrintErrorMessage($"{nameof(TcpConnectionHandler)} Server error");
         }
         catch (SocketException se)
         {
-            PrintErrorMessage($"{nameof(TcpConnectionHandler)} Socket error", se);
+            se.PrintErrorMessage($"{nameof(TcpConnectionHandler)} Socket error");
         }
         catch (Exception e)
         {
-            PrintErrorMessage($"{nameof(TcpConnectionHandler)} Server error", e);
+            e.PrintErrorMessage($"{nameof(TcpConnectionHandler)} Server error");
         }
     }
 
@@ -142,15 +142,15 @@ internal sealed class Server
         }
         catch (ObjectDisposedException ode)
         {
-            PrintErrorMessage($"{nameof(TcpClientHandler)} Server error", ode);
+            ode.PrintErrorMessage($"{nameof(TcpClientHandler)} Server error");
         }
         catch (SocketException se)
         {
-            PrintErrorMessage($"{nameof(TcpClientHandler)} Socket error", se);
+            se.PrintErrorMessage($"{nameof(TcpClientHandler)} Socket error");
         }
         catch (Exception e)
         {
-            PrintErrorMessage($"{nameof(TcpClientHandler)} Server error", e);
+            e.PrintErrorMessage($"{nameof(TcpClientHandler)} Server error");
         }
         finally
         {
@@ -171,15 +171,4 @@ internal sealed class Server
     /// <returns>Port for TCP</returns>
     private static int GetRandomTcpPort()
         => new Random().Next(Config.MinTcpPort, Config.MaxTcpPort);
-
-    private static void PrintErrorMessage(string baseMessage, Exception exception)
-    {
-        Console.ForegroundColor = ConsoleColor.Red;
-        Console.WriteLine($"{baseMessage}: {exception.Message}");
-        if (exception.InnerException is not null)
-        {
-            Console.WriteLine($"Wyjątek wewnętrzny: {exception.InnerException?.Message}");
-        }
-        Console.ForegroundColor = ConsoleColor.Gray;
-    }
 }

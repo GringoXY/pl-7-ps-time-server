@@ -17,4 +17,17 @@ public static class Extensions
         string json = @string.Replace(Config.OfferMessageRequest, string.Empty);
         return JsonSerializer.Deserialize<OfferIPAddress[]>(json) ?? [];
     }
+
+    public static void PrintErrorMessage(this Exception exception, string baseMessage)
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+
+        Console.WriteLine($"{baseMessage}: {exception.Message}");
+        if (exception.InnerException is not null)
+        {
+            Console.WriteLine($"Wyjątek wewnętrzny: {exception.InnerException?.Message}");
+        }
+
+        Console.ForegroundColor = ConsoleColor.Gray;
+    }
 }
