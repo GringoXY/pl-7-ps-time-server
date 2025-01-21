@@ -26,8 +26,12 @@ internal sealed class Client
                 {
                     ReceiveTimeout = Config.UdpDiscoverTimeoutRequestInMilliseconds,
                 },
+                MulticastLoopback = false,
             };
-            udpClient.JoinMulticastGroup(Config.MulticastGroupIpAddress, Config.UdpDiscoverPort);
+            udpClient.JoinMulticastGroup(Config.MulticastGroupIpAddress, IPAddress.Parse("192.168.0.113"));
+            IPEndPoint localEndPoint = new(IPAddress.Any, Config.UdpDiscoverPort);
+            udpClient.Client.Bind(localEndPoint);
+            // udpClient.Client.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.MulticastInterface, IPAddress.Parse("192.168.0.113").GetAddressBytes());
             IPEndPoint multicastEndPoint = new(Config.MulticastGroupIpAddress, Config.UdpDiscoverPort);
 
             Console.WriteLine($"Started UDP multicast {Config.DiscoverMessageRequest}: {multicastEndPoint.Address}");
