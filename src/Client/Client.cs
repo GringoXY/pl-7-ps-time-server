@@ -26,6 +26,7 @@ internal sealed class Client
                     ReceiveTimeout = Config.UdpDiscoverTimeoutRequestInMilliseconds,
                 },
                 ExclusiveAddressUse = false,
+                MulticastLoopback = false,
             };
 
             udpClient.Client.SetSocketOption(
@@ -33,9 +34,10 @@ internal sealed class Client
                 SocketOptionName.ReuseAddress,
                 true);
 
-            udpClient.JoinMulticastGroup(Config.MulticastGroupIpAddress);
+            IPAddress localIpAddress = IPAddress.Parse("<IP_ADDRESS_OF_CLIENT_IN_NETWORK");
+            IPEndPoint localEndPoint = new(localIpAddress, Config.UdpDiscoverPort);
+            udpClient.JoinMulticastGroup(Config.MulticastGroupIpAddress, localIpAddress);
 
-            IPEndPoint localEndPoint = new(IPAddress.Any, Config.UdpDiscoverPort);
             udpClient.Client.Bind(localEndPoint);
 
             IPEndPoint multicastEndPoint = new(Config.MulticastGroupIpAddress, Config.UdpDiscoverPort);

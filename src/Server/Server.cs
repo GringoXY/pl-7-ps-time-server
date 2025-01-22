@@ -52,16 +52,17 @@ internal sealed class Server
                 SocketOptionName.ReuseAddress,
                 true);
 
-            udpServer.JoinMulticastGroup(Config.MulticastGroupIpAddress);
+            IPAddress localIpAddress = IPAddress.Parse("<IP_ADDRESS_OF_SERVER_IN_NETWORK");
+            IPEndPoint localEndPoint = new(localIpAddress, Config.UdpDiscoverPort);
+            udpServer.JoinMulticastGroup(Config.MulticastGroupIpAddress, localIpAddress);
 
-            IPEndPoint localEndPoint = new(IPAddress.Any, Config.UdpDiscoverPort);
             udpServer.Client.Bind(localEndPoint);
 
             IPEndPoint multicastEndPoint = new(Config.MulticastGroupIpAddress, Config.UdpDiscoverPort);
 
             while (true)
             {
-                byte[] receivedBytes = udpServer.Receive(ref localEndPoint);
+                byte[] receivedBytes = udpServer.Receive(ref multicastEndPoint);
                 string receivedMessage = Encoding.ASCII.GetString(receivedBytes);
 
                 if (receivedMessage.Clear().Equals(Config.DiscoverMessageRequest, StringComparison.CurrentCultureIgnoreCase))
@@ -77,7 +78,7 @@ internal sealed class Server
 
                     udpServer.Send(offerBytes, offerBytes.Length, multicastEndPoint);
 
-                    Console.WriteLine($"Sent {Config.OfferMessageRequest} to {udpServer.Client.LocalEndPoint}");
+                    Console.WriteLine($"Sent {Config.OfferMessageRequest} to {multicastEndPoint}");
                 }
             }
         }
