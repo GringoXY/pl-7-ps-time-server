@@ -44,15 +44,20 @@ internal sealed class Server
         {
             using UdpClient udpServer = new()
             {
-                // Prevents the case when datagram is missed on switch/router
-                Ttl = 2,
+                ExclusiveAddressUse = false,
             };
+
+            udpServer.Client.SetSocketOption(
+                SocketOptionLevel.Socket,
+                SocketOptionName.ReuseAddress,
+                true);
+
             udpServer.JoinMulticastGroup(Config.MulticastGroupIpAddress);
 
             IPEndPoint localEndPoint = new(IPAddress.Any, Config.UdpDiscoverPort);
             udpServer.Client.Bind(localEndPoint);
 
-            Console.WriteLine($"Started listening UDP multicast {Config.DiscoverMessageRequest}: {udpServer.Client.LocalEndPoint}");
+            IPEndPoint multicastEndPoint = new(Config.MulticastGroupIpAddress, Config.UdpDiscoverPort);
 
             while (true)
             {
@@ -70,7 +75,7 @@ internal sealed class Server
                     string offerMessage = $"{Config.OfferMessageRequest}{JsonSerializer.Serialize(offerIpAddresses)}";
                     byte[] offerBytes = Encoding.ASCII.GetBytes(offerMessage);
 
-                    udpServer.Send(offerBytes, offerBytes.Length, localEndPoint);
+                    udpServer.Send(offerBytes, offerBytes.Length, multicastEndPoint);
 
                     Console.WriteLine($"Sent {Config.OfferMessageRequest} to {udpServer.Client.LocalEndPoint}");
                 }
@@ -170,4 +175,16 @@ internal sealed class Server
     /// <returns>Port for TCP</returns>
     private static int GetRandomTcpPort()
         => new Random().Next(Config.MinTcpPort, Config.MaxTcpPort);
+
+    private static IPAddress? GetLocalIpAddress()
+    {
+        if (NetworkInterface.GetIsNetworkAvailable() == false)
+        {
+            return null;
+        }
+
+        IPHostEntry iPHostEntry = Dns.GetHostEntry(Dns.GetHostName());
+
+        return iPHostEntry.AddressList.FirstOrDefault(ip => ip.AddressFamily == AddressFamily.InterNetwork);
+    }
 }

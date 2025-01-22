@@ -4,13 +4,13 @@ namespace Shared;
 
 public static class Config
 {
-    public const int MinTcpPort = 1024;
+    public const int MinTcpPort = 1025;
     public const int MaxTcpPort = 65535;
 
     /// <summary>
     /// Based on docs
     /// </summary>
-    public const int UdpDiscoverPort = 7;
+    public const int UdpDiscoverPort = 2222;
 
     /// <summary>
     /// Command/request name for client requesting list of IP addresses (<see cref="OfferMessageRequest"/> for more)
@@ -27,7 +27,7 @@ public static class Config
     /// </summary>
     public const string TimeMessageRequest = "TIME";
 
-    public static readonly IPAddress MulticastGroupIpAddress = IPAddress.Parse("239.0.0.0");
+    public static readonly IPAddress MulticastGroupIpAddress = IPAddress.Parse("239.0.0.222");
 
     /// <summary>
     /// Sleep in milliseconds only for UDP <see cref="DiscoverMessageRequest"/> requests
