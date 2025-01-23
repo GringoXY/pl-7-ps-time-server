@@ -63,10 +63,9 @@ internal sealed class Server
     private static void ShutdownHandler()
     {
         Console.WriteLine("\"Q\" shutdowns server");
-        if (Console.ReadKey(true).Key == ConsoleKey.Q)
-        {
-            _shutdownServer = true;
-        }
+        while (Console.ReadKey(true).Key != ConsoleKey.Q);
+
+        _shutdownServer = true;
 
         _udpServer?.Close();
         _udpDiscoverThread?.Join();
