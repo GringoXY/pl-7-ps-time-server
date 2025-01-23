@@ -6,20 +6,29 @@ using System.Text;
 internal sealed class Client
 {
     private static OfferIPAddress _previousIpAddress;
-    private static TcpClient _tcpClient;
+
+    private static UdpClient _udpDiscoverClient;
+    private static TcpClient _tcpTimeClient;
+
+    private static Thread _udpDiscoverThread;
+    private static Thread _tcpTimeThread;
+
     private static int? _timeTcpRequestFrequencyInMilliseconds = null;
 
     public void Start()
     {
-        new Thread(UdpDiscoverHandler).Start();
-        new Thread(TcpTimeHandler).Start();
+        _udpDiscoverThread = new Thread(UdpDiscoverHandler);
+        _udpDiscoverThread.Start();
+
+        _tcpTimeThread = new Thread(TcpTimeHandler);
+        _tcpTimeThread.Start();
     }
 
     private static void UdpDiscoverHandler()
     {
         try
         {
-            using UdpClient udpClient = new()
+            _udpDiscoverClient = new()
             {
                 Client =
                 {
@@ -29,16 +38,16 @@ internal sealed class Client
                 MulticastLoopback = false,
             };
 
-            udpClient.Client.SetSocketOption(
+            _udpDiscoverClient.Client.SetSocketOption(
                 SocketOptionLevel.Socket,
                 SocketOptionName.ReuseAddress,
                 true);
 
             IPAddress localIpAddress = Utils.GetLocalIPAddress();
             IPEndPoint localEndPoint = new(localIpAddress, Config.UdpDiscoverPort);
-            udpClient.JoinMulticastGroup(Config.MulticastGroupIpAddress, localIpAddress);
+            _udpDiscoverClient.JoinMulticastGroup(Config.MulticastGroupIpAddress, localIpAddress);
 
-            udpClient.Client.Bind(localEndPoint);
+            _udpDiscoverClient.Client.Bind(localEndPoint);
 
             IPEndPoint multicastEndPoint = new(Config.MulticastGroupIpAddress, Config.UdpDiscoverPort);
 
@@ -48,11 +57,11 @@ internal sealed class Client
 
             while (true)
             {
-                if (_tcpClient?.Connected is null or false)
+                if (_tcpTimeClient?.Connected is null or false)
                 {
-                    udpClient.Send(discoverMessage, discoverMessage.Length, multicastEndPoint);
+                    _udpDiscoverClient.Send(discoverMessage, discoverMessage.Length, multicastEndPoint);
 
-                    byte[] offerReceiveBytes = udpClient.Receive(ref multicastEndPoint);
+                    byte[] offerReceiveBytes = _udpDiscoverClient.Receive(ref multicastEndPoint);
                     string offerResponseMessage = Encoding.ASCII.GetString(offerReceiveBytes);
                     if (offerResponseMessage.StartsWith(Config.OfferMessageRequest))
                     {
@@ -80,7 +89,7 @@ internal sealed class Client
                         try
                         {
                             // May throw exception on connection attempt
-                            _tcpClient = new(chosenIpAddress.IPAddress, chosenIpAddress.Port)
+                            _tcpTimeClient = new(chosenIpAddress.IPAddress, chosenIpAddress.Port)
                             {
                                 SendTimeout = Config.TcpTimeRequestTimeoutInMilliseconds
                             };
@@ -131,6 +140,11 @@ internal sealed class Client
         {
             e.PrintErrorMessage($"{nameof(UdpDiscoverHandler)} Client error");
         }
+        finally
+        {
+            _udpDiscoverClient?.Close();
+            _udpDiscoverThread?.Join();
+        }
     }
 
     private static void TcpTimeHandler()
@@ -139,17 +153,17 @@ internal sealed class Client
         {
             while (true)
             {
-                if (_tcpClient?.Connected is true && _timeTcpRequestFrequencyInMilliseconds is not null)
+                if (_tcpTimeClient?.Connected is true && _timeTcpRequestFrequencyInMilliseconds is not null)
                 {
                     // 1. Get current client time [ms]
                     long currentClientTime1 = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
                     // 2. Send "TIME" TCP request to get server's time [ms]
                     byte[] serverTimeRequest = Encoding.ASCII.GetBytes(Config.TimeMessageRequest);
-                    _tcpClient.Client.Send(serverTimeRequest);
+                    _tcpTimeClient.Client.Send(serverTimeRequest);
 
                     byte[] buffer = new byte[256];
-                    int receiveServerResponseBytes = _tcpClient.Client.Receive(buffer);
+                    int receiveServerResponseBytes = _tcpTimeClient.Client.Receive(buffer);
                     string serverUnixTimeInMilliseconds = Encoding.ASCII.GetString(buffer, 0, receiveServerResponseBytes);
 
                     if (long.TryParse(serverUnixTimeInMilliseconds, out long serverTime))
@@ -189,7 +203,8 @@ internal sealed class Client
         }
         finally
         {
-            _tcpClient?.Close();
+            _tcpTimeClient?.Close();
+            _tcpTimeThread?.Join();
         }
     }
 }
