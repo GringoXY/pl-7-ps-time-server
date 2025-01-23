@@ -9,7 +9,7 @@ using System.Text.Json;
 internal sealed class Server
 {
     private static Thread _udpDiscoverThread;
-    private static UdpClient _udpServer;
+    private static UdpClient _udpServerDiscover;
 
     private static Thread _serverShutdownThread;
     private static bool _shutdownServer = false;
@@ -67,7 +67,7 @@ internal sealed class Server
 
         _shutdownServer = true;
 
-        _udpServer?.Close();
+        _udpServerDiscover?.Close();
         _udpDiscoverThread?.Join();
 
         foreach ((TcpListener tcpListener, Thread thread) in _tcpConnectionThreads)
@@ -89,27 +89,27 @@ internal sealed class Server
     {
         try
         {
-            _udpServer = new()
+            _udpServerDiscover = new()
             {
                 ExclusiveAddressUse = false,
             };
 
-            _udpServer.Client.SetSocketOption(
+            _udpServerDiscover.Client.SetSocketOption(
                 SocketOptionLevel.Socket,
                 SocketOptionName.ReuseAddress,
                 true);
 
             IPAddress localIpAddress = Utils.GetLocalIPAddress();
             IPEndPoint localEndPoint = new(localIpAddress, Config.UdpDiscoverPort);
-            _udpServer.JoinMulticastGroup(Config.MulticastGroupIpAddress, localIpAddress);
+            _udpServerDiscover.JoinMulticastGroup(Config.MulticastGroupIpAddress, localIpAddress);
 
-            _udpServer.Client.Bind(localEndPoint);
+            _udpServerDiscover.Client.Bind(localEndPoint);
 
             IPEndPoint multicastEndPoint = new(Config.MulticastGroupIpAddress, Config.UdpDiscoverPort);
 
             while (_shutdownServer == false)
             {
-                byte[] receivedBytes = _udpServer.Receive(ref multicastEndPoint);
+                byte[] receivedBytes = _udpServerDiscover.Receive(ref multicastEndPoint);
                 string receivedMessage = Encoding.ASCII.GetString(receivedBytes);
 
                 if (receivedMessage.Clear().Equals(Config.DiscoverMessageRequest, StringComparison.CurrentCultureIgnoreCase))
@@ -123,7 +123,7 @@ internal sealed class Server
                     string offerMessage = $"{Config.OfferMessageRequest}{JsonSerializer.Serialize(offerIpAddresses)}";
                     byte[] offerBytes = Encoding.ASCII.GetBytes(offerMessage);
 
-                    _udpServer.Send(offerBytes, offerBytes.Length, multicastEndPoint);
+                    _udpServerDiscover.Send(offerBytes, offerBytes.Length, multicastEndPoint);
 
                     Console.WriteLine($"Sent {Config.OfferMessageRequest} to {multicastEndPoint}");
                 }
@@ -143,7 +143,7 @@ internal sealed class Server
         }
         finally
         {
-            _udpServer?.Close();
+            _udpServerDiscover?.Close();
             _udpDiscoverThread?.Join();
         }
     }
