@@ -8,61 +8,109 @@ using System.Text.Json;
 
 internal sealed class Server
 {
+    private static Thread _udpDiscoverThread;
+    private static UdpClient _udpServer;
+
+    private static Thread _serverShutdownThread;
+    private static bool _shutdownServer = false;
+
+    private static readonly ConcurrentDictionary<TcpListener, Thread> _tcpConnectionThreads = [];
+    private static readonly ConcurrentDictionary<TcpClient, Thread> _tcpClientThreads = [];
+
     private static readonly List<TcpListener> _tpcListeners = [];
     // https://stackoverflow.com/questions/9855230/how-do-i-get-the-network-interface-and-its-right-ipv4-address
     private static readonly IEnumerable<IPAddress> _availableIpAddresses
         = NetworkInterface.GetAllNetworkInterfaces()
-            .Where(ni => ni.OperationalStatus is OperationalStatus.Up)
+            .Where(ni =>
+                ni is
+                {
+                    OperationalStatus: OperationalStatus.Up,
+                    NetworkInterfaceType: NetworkInterfaceType.Ethernet or NetworkInterfaceType.Wireless80211,
+                    SupportsMulticast: true,
+                }
+                and not { NetworkInterfaceType: NetworkInterfaceType.Loopback }
+            )
             .Select(ni => ni.GetIPProperties().UnicastAddresses)
             .SelectMany(u => u)
-            .Where(u =>
-                u.Address.AddressFamily == AddressFamily.InterNetwork
-                && IPAddress.IsLoopback(u.Address) == false
-            ).Select(u => u.Address);
+            .Where(u => u.Address.AddressFamily == AddressFamily.InterNetwork)
+            .Select(u => u.Address);
 
     private static readonly ConcurrentDictionary<string, ClientState> _clientStats = [];
 
     public void Start()
     {
-        new Thread(UdpDiscoverHandler).Start();
+        _serverShutdownThread = new(ShutdownHandler);
+        _serverShutdownThread.Start();
+
+        _udpDiscoverThread = new(UdpDiscoverHandler);
+        _udpDiscoverThread.Start();
 
         foreach (IPAddress ip in _availableIpAddresses)
         {
-            int tcpPort = GetRandomTcpPort();
+            int tcpPort = Utils.GetRandomTcpPort();
             TcpListener tcpListener = new(ip, tcpPort);
             _tpcListeners.Add(tcpListener);
 
-            new Thread(() => TcpConnectionHandler(tcpListener)).Start();
+            Thread tcpListenerThread = new(() => TcpConnectionHandler(tcpListener));
+            tcpListenerThread.Start();
+
+            _tcpConnectionThreads.TryAdd(tcpListener, tcpListenerThread);
 
             Console.WriteLine($"Listening on {ip}:{tcpPort}");
         }
+    }
+
+    private static void ShutdownHandler()
+    {
+        Console.WriteLine("\"Q\" shutdowns server");
+        if (Console.ReadKey(true).Key == ConsoleKey.Q)
+        {
+            _shutdownServer = true;
+        }
+
+        _udpServer?.Close();
+        _udpDiscoverThread?.Join();
+
+        foreach ((TcpListener tcpListener, Thread thread) in _tcpConnectionThreads)
+        {
+            tcpListener.Stop();
+            thread.Join();
+        }
+
+        foreach ((TcpClient tcpClient, Thread thread) in _tcpClientThreads)
+        {
+            tcpClient.Close();
+            thread.Join();
+        }
+
+        _serverShutdownThread?.Join();
     }
 
     private static void UdpDiscoverHandler()
     {
         try
         {
-            using UdpClient udpServer = new()
+            _udpServer = new()
             {
                 ExclusiveAddressUse = false,
             };
 
-            udpServer.Client.SetSocketOption(
+            _udpServer.Client.SetSocketOption(
                 SocketOptionLevel.Socket,
                 SocketOptionName.ReuseAddress,
                 true);
 
-            IPAddress localIpAddress = IPAddress.Parse("<IP_ADDRESS_OF_SERVER_IN_NETWORK");
+            IPAddress localIpAddress = Utils.GetLocalIPAddress();
             IPEndPoint localEndPoint = new(localIpAddress, Config.UdpDiscoverPort);
-            udpServer.JoinMulticastGroup(Config.MulticastGroupIpAddress, localIpAddress);
+            _udpServer.JoinMulticastGroup(Config.MulticastGroupIpAddress, localIpAddress);
 
-            udpServer.Client.Bind(localEndPoint);
+            _udpServer.Client.Bind(localEndPoint);
 
             IPEndPoint multicastEndPoint = new(Config.MulticastGroupIpAddress, Config.UdpDiscoverPort);
 
-            while (true)
+            while (_shutdownServer == false)
             {
-                byte[] receivedBytes = udpServer.Receive(ref multicastEndPoint);
+                byte[] receivedBytes = _udpServer.Receive(ref multicastEndPoint);
                 string receivedMessage = Encoding.ASCII.GetString(receivedBytes);
 
                 if (receivedMessage.Clear().Equals(Config.DiscoverMessageRequest, StringComparison.CurrentCultureIgnoreCase))
@@ -76,7 +124,7 @@ internal sealed class Server
                     string offerMessage = $"{Config.OfferMessageRequest}{JsonSerializer.Serialize(offerIpAddresses)}";
                     byte[] offerBytes = Encoding.ASCII.GetBytes(offerMessage);
 
-                    udpServer.Send(offerBytes, offerBytes.Length, multicastEndPoint);
+                    _udpServer.Send(offerBytes, offerBytes.Length, multicastEndPoint);
 
                     Console.WriteLine($"Sent {Config.OfferMessageRequest} to {multicastEndPoint}");
                 }
@@ -94,6 +142,11 @@ internal sealed class Server
         {
             e.PrintErrorMessage($"{nameof(UdpDiscoverHandler)} Server error");
         }
+        finally
+        {
+            _udpServer?.Close();
+            _udpDiscoverThread?.Join();
+        }
     }
 
     private static void TcpConnectionHandler(TcpListener tcpListener)
@@ -102,13 +155,18 @@ internal sealed class Server
         {
             tcpListener.Start();
 
-            while (true)
+            while (_shutdownServer == false)
             {
                 TcpClient client = tcpListener.AcceptTcpClient();
                 EndPoint? clientRemoteEndPoint = client.Client.RemoteEndPoint;
+
+                Thread tcpClientThread = new(() => TcpClientHandler(client));
+                tcpClientThread.Start();
+
+                _tcpClientThreads.TryAdd(client, tcpClientThread);
+
                 Console.WriteLine($"Client connected {clientRemoteEndPoint}");
                 _clientStats.TryAdd(client.Client.RemoteEndPoint?.ToString(), ClientState.Connected);
-                new Thread(() => TcpClientHandler(client)).Start();
             }
         }
         catch (ObjectDisposedException ode)
@@ -123,17 +181,23 @@ internal sealed class Server
         {
             e.PrintErrorMessage($"{nameof(TcpConnectionHandler)} Server error");
         }
+        finally
+        {
+            tcpListener.Stop();
+            _ = _tcpConnectionThreads.Remove(tcpListener, out Thread? tcpConnectionThread);
+            tcpConnectionThread?.Join();
+        }
     }
 
     private static void TcpClientHandler(TcpClient tcpClient)
     {
         try
         {
-            byte[] buffer = new byte[256];
+            byte[] buffer = new byte[1024];
             int bytesReceive = tcpClient.Client.Receive(buffer);
             string receiveMessage = Encoding.ASCII.GetString(buffer, 0, bytesReceive);
 
-            while (receiveMessage.Clear().Equals(Config.TimeMessageRequest, StringComparison.CurrentCultureIgnoreCase))
+            while (receiveMessage.Clear().Equals(Config.TimeMessageRequest, StringComparison.CurrentCultureIgnoreCase) && _shutdownServer == false)
             {
                 long milliseconds = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                 byte[] sendMessageBytes = Encoding.ASCII.GetBytes(milliseconds.ToString());
@@ -166,26 +230,8 @@ internal sealed class Server
             }
 
             tcpClient.Close();
+            _ = _tcpClientThreads.Remove(tcpClient, out Thread? tcpClientThread);
+            tcpClientThread?.Join();
         }
-    }
-
-    /// <summary>
-    /// Helper method that generates random TCP port
-    /// in range [<see cref="Config.MinTcpPort"/>; <see cref="Config.MaxTcpPort"/>].
-    /// </summary>
-    /// <returns>Port for TCP</returns>
-    private static int GetRandomTcpPort()
-        => new Random().Next(Config.MinTcpPort, Config.MaxTcpPort);
-
-    private static IPAddress? GetLocalIpAddress()
-    {
-        if (NetworkInterface.GetIsNetworkAvailable() == false)
-        {
-            return null;
-        }
-
-        IPHostEntry iPHostEntry = Dns.GetHostEntry(Dns.GetHostName());
-
-        return iPHostEntry.AddressList.FirstOrDefault(ip => ip.AddressFamily == AddressFamily.InterNetwork);
     }
 }

@@ -27,7 +27,7 @@ public static class Config
     /// </summary>
     public const string TimeMessageRequest = "TIME";
 
-    public static readonly IPAddress MulticastGroupIpAddress = IPAddress.Parse("239.0.0.222");
+    public static readonly IPAddress MulticastGroupIpAddress = IPAddress.Parse("239.0.0.0");
 
     /// <summary>
     /// Sleep in milliseconds only for UDP <see cref="DiscoverMessageRequest"/> requests

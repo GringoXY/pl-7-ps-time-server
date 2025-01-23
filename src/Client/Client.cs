@@ -34,7 +34,7 @@ internal sealed class Client
                 SocketOptionName.ReuseAddress,
                 true);
 
-            IPAddress localIpAddress = IPAddress.Parse("<IP_ADDRESS_OF_CLIENT_IN_NETWORK");
+            IPAddress localIpAddress = Utils.GetLocalIPAddress();
             IPEndPoint localEndPoint = new(localIpAddress, Config.UdpDiscoverPort);
             udpClient.JoinMulticastGroup(Config.MulticastGroupIpAddress, localIpAddress);
 
@@ -167,7 +167,7 @@ internal sealed class Client
                     else
                     {
                         Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine("Invalid time from server. Should be in milliseconds! Fix the server...");
+                        Console.WriteLine("Invalid time from server. Should be in milliseconds [ms]! Fix the server...");
                         Console.ForegroundColor = ConsoleColor.Gray;
                     }
                 }
