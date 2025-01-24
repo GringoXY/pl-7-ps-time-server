@@ -74,7 +74,5 @@ internal sealed class Server
             tcpConnection.Shutdown();
             thread.Join();
         }
-
-        _serverShutdownThread?.Join();
     }
 }
