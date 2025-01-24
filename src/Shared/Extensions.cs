@@ -18,7 +18,7 @@ public static class Extensions
         return JsonSerializer.Deserialize<OfferIPAddress[]>(json) ?? [];
     }
 
-    public static void PrintErrorMessage(this Exception exception, string baseMessage)
+    public static void PrintErrorMessage(this Exception exception, string baseMessage = "")
     {
         Console.ForegroundColor = ConsoleColor.Red;
 

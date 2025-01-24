@@ -1,1 +1,1 @@
-﻿new Server().Start();
+﻿new Server.Server().Start();
