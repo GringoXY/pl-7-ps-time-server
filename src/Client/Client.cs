@@ -8,6 +8,7 @@ namespace Client;
 
 internal sealed class Client
 {
+    private static CancellationTokenSource _cancellationTokenSource = new();
     private static Thread _clientShutdownThread;
 
     private static OfferIPAddress _previousIpAddress;
@@ -36,6 +37,8 @@ internal sealed class Client
     {
         Console.WriteLine("\"Q\" shutdowns client");
         while (Console.ReadKey(true).Key != ConsoleKey.Q);
+
+        _cancellationTokenSource.Cancel();
 
         _udpDiscoverClient?.Close();
         _udpDiscoverThread.Join();
@@ -75,7 +78,7 @@ internal sealed class Client
 
             byte[] discoverMessage = Encoding.ASCII.GetBytes(Config.DiscoverMessageRequest);
 
-            while (true)
+            while (_cancellationTokenSource.IsCancellationRequested == false)
             {
                 if (_tcpTimeClient?.Connected is null or false)
                 {
@@ -170,7 +173,7 @@ internal sealed class Client
     {
         try
         {
-            while (true)
+            while (_cancellationTokenSource.IsCancellationRequested == false)
             {
                 if (_tcpTimeClient?.Connected is true && _timeTcpRequestFrequencyInMilliseconds is not null)
                 {
