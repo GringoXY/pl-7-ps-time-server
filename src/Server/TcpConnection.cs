@@ -107,14 +107,12 @@ internal sealed class TcpConnection(IPAddress LocalIPAddress, int Port, Cancella
     {
         foreach ((TcpClient tcpClient, Thread thread) in _tcpClients)
         {
-            tcpClient.Client.Close();
             tcpClient.Close();
             thread.Join();
         }
 
         _tcpClients.Clear();
 
-        _listener?.Server?.Close();
         _listener?.Stop();
     }
 }

@@ -2,9 +2,14 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
+
+namespace Client;
 
 internal sealed class Client
 {
+    private static Thread _clientShutdownThread;
+
     private static OfferIPAddress _previousIpAddress;
 
     private static UdpClient _udpDiscoverClient;
@@ -17,11 +22,26 @@ internal sealed class Client
 
     public void Start()
     {
-        _udpDiscoverThread = new Thread(UdpDiscoverHandler);
+        _clientShutdownThread = new(ShutdownHandler);
+        _clientShutdownThread.Start();
+
+        _udpDiscoverThread = new(UdpDiscoverHandler);
         _udpDiscoverThread.Start();
 
-        _tcpTimeThread = new Thread(TcpTimeHandler);
+        _tcpTimeThread = new(TcpTimeHandler);
         _tcpTimeThread.Start();
+    }
+
+    private static void ShutdownHandler()
+    {
+        Console.WriteLine("\"Q\" shutdowns client");
+        while (Console.ReadKey(true).Key != ConsoleKey.Q);
+
+        _udpDiscoverClient?.Close();
+        _udpDiscoverThread.Join();
+
+        _tcpTimeClient?.Close();
+        _tcpTimeThread.Join();
     }
 
     private static void UdpDiscoverHandler()
@@ -143,7 +163,6 @@ internal sealed class Client
         finally
         {
             _udpDiscoverClient?.Close();
-            _udpDiscoverThread?.Join();
         }
     }
 
@@ -204,7 +223,6 @@ internal sealed class Client
         finally
         {
             _tcpTimeClient?.Close();
-            _tcpTimeThread?.Join();
         }
     }
 }

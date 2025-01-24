@@ -79,7 +79,6 @@ internal sealed class UdpDiscover(IPAddress LocalIPAddress, int Port, Cancellati
 
     public void Dispose()
     {
-        _client?.Client?.Close();
         _client?.Close();
     }
 }
