@@ -10,8 +10,6 @@ internal sealed class Client
     private static CancellationTokenSource _cancellationTokenSource = new();
     private static Thread _clientShutdownThread;
 
-    private static Thread _clientCloseServerConnectionThread;
-
     private static OfferIPAddress _previousIpAddress;
 
     private static UdpClient _udpDiscoverClient;
@@ -27,9 +25,6 @@ internal sealed class Client
         _clientShutdownThread = new(ShutdownHandler);
         _clientShutdownThread.Start();
 
-        _clientCloseServerConnectionThread = new(CloseServerConnectionHandler);
-        _clientCloseServerConnectionThread.Start();
-
         _udpDiscoverThread = new(UdpDiscoverHandler);
         _udpDiscoverThread.Start();
 
@@ -40,7 +35,7 @@ internal sealed class Client
     private static void ShutdownHandler()
     {
         Console.WriteLine($"\"{Config.ShutdownKey}\" shutdowns client");
-        while (Console.ReadKey(true).Key != Config.ShutdownKey) ;
+        while (Console.ReadKey(true).Key != Config.ShutdownKey);
 
         _cancellationTokenSource.Cancel();
 
@@ -49,14 +44,8 @@ internal sealed class Client
 
         _tcpTimeClient?.Close();
         _tcpTimeThread.Join();
-    }
 
-    private static void CloseServerConnectionHandler()
-    {
-        Console.WriteLine($"\"{nameof(ConsoleKey.C)}\" closes connection with server");
-        while (Console.ReadKey(true).Key != ConsoleKey.C);
-
-        _tcpTimeClient?.Close();
+        _clientCloseServerConnectionThread.Join();
     }
 
     private static void UdpDiscoverHandler()
@@ -100,26 +89,26 @@ internal sealed class Client
                     string offerResponseMessage = Encoding.ASCII.GetString(offerReceiveBytes);
                     if (offerResponseMessage.StartsWith(Config.OfferMessageRequest))
                     {
-                        OfferIPAddress[] offerIpAddresses = offerResponseMessage.ParseOfferMessage();
+                        OfferIPAddress[] offerIpAddress = offerResponseMessage.ParseOfferMessage();
                         Console.WriteLine("Available IP addresses:");
-                        for (int i = 0; i < offerIpAddresses.Length; i += 1)
+                        for (int i = 0; i < offerIpAddress.Length; i += 1)
                         {
-                            Console.WriteLine($"{i + 1}. {offerIpAddresses[i]}");
+                            Console.WriteLine($"{i + 1}. {offerIpAddress[i]}");
                         }
 
-                        Console.Write($"Choose IP address (1-{offerIpAddresses.Length}): ");
+                        Console.Write($"Choose IP address (1-{offerIpAddress.Length}): ");
                         int listPoint = -1;
                         while (
                             int.TryParse(Console.ReadLine(), out listPoint) == false
                             || listPoint < 1
-                            || listPoint > offerIpAddresses.Length
+                            || listPoint > offerIpAddress.Length
                         )
                         {
-                            Console.Write($"Invalid choice... Choose IP address (1-{offerIpAddresses.Length}): ");
+                            Console.Write($"Invalid choice... Choose IP address (1-{offerIpAddress.Length}): ");
                         }
 
                         Console.Clear();
-                        OfferIPAddress chosenIpAddress = offerIpAddresses[listPoint - 1];
+                        OfferIPAddress chosenIpAddress = offerIpAddress[listPoint - 1];
 
                         try
                         {
