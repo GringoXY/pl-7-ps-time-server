@@ -30,13 +30,13 @@ internal sealed class UdpDiscover(IPAddress LocalIPAddress, int Port, Cancellati
                 true);
 
             IPEndPoint localEndPoint = new(LocalIPAddress, Config.UdpDiscoverPort);
+            _client.JoinMulticastGroup(Config.MulticastGroupIpAddress, LocalIPAddress);
             _client.Client.Bind(localEndPoint);
 
-            _client.JoinMulticastGroup(Config.MulticastGroupIpAddress, LocalIPAddress);
+            IPEndPoint multicastEndPoint = new(Config.MulticastGroupIpAddress, Config.UdpDiscoverPort);
 
             while (CancellationToken.IsCancellationRequested == false)
             {
-                IPEndPoint multicastEndPoint = new(Config.MulticastGroupIpAddress, Config.UdpDiscoverPort);
                 Console.WriteLine($"Waiting for {Config.DiscoverMessageRequest} receive via {multicastEndPoint.Address}:{multicastEndPoint.Port} on network interface with IP {localEndPoint}");
                 IPEndPoint remoteEndPoint = new(LocalIPAddress, Config.UdpDiscoverPort);
                 byte[] receivedBytes = _client.Receive(ref remoteEndPoint);
