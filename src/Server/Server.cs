@@ -58,8 +58,8 @@ internal sealed class Server
 
     private static void ShutdownHandler()
     {
-        Console.WriteLine("\"Q\" shutdowns server");
-        while (Console.ReadKey(true).Key != ConsoleKey.Q);
+        Console.WriteLine($"\"{Config.ShutdownKey}\" shutdowns server");
+        while (Console.ReadKey(true).Key != Config.ShutdownKey);
 
         _cancellationTokenSource.Cancel();
 

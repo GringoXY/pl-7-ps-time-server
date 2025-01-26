@@ -2,7 +2,6 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using System.Threading;
 
 namespace Client;
 
@@ -10,6 +9,8 @@ internal sealed class Client
 {
     private static CancellationTokenSource _cancellationTokenSource = new();
     private static Thread _clientShutdownThread;
+
+    private static Thread _clientCloseServerConnectionThread;
 
     private static OfferIPAddress _previousIpAddress;
 
@@ -26,6 +27,9 @@ internal sealed class Client
         _clientShutdownThread = new(ShutdownHandler);
         _clientShutdownThread.Start();
 
+        _clientCloseServerConnectionThread = new(CloseServerConnectionHandler);
+        _clientCloseServerConnectionThread.Start();
+
         _udpDiscoverThread = new(UdpDiscoverHandler);
         _udpDiscoverThread.Start();
 
@@ -35,8 +39,8 @@ internal sealed class Client
 
     private static void ShutdownHandler()
     {
-        Console.WriteLine("\"Q\" shutdowns client");
-        while (Console.ReadKey(true).Key != ConsoleKey.Q);
+        Console.WriteLine($"\"{Config.ShutdownKey}\" shutdowns client");
+        while (Console.ReadKey(true).Key != Config.ShutdownKey) ;
 
         _cancellationTokenSource.Cancel();
 
@@ -45,6 +49,14 @@ internal sealed class Client
 
         _tcpTimeClient?.Close();
         _tcpTimeThread.Join();
+    }
+
+    private static void CloseServerConnectionHandler()
+    {
+        Console.WriteLine($"\"{nameof(ConsoleKey.C)}\" closes connection with server");
+        while (Console.ReadKey(true).Key != ConsoleKey.C);
+
+        _tcpTimeClient?.Close();
     }
 
     private static void UdpDiscoverHandler()

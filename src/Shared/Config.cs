@@ -58,4 +58,6 @@ public static class Config
     /// in order to lower CPU usage.
     /// </summary>
     public const int MaxTcpTimeRequestFrequencyInMilliseconds = 1_000;
+
+    public const ConsoleKey ShutdownKey = ConsoleKey.Q;
 }
