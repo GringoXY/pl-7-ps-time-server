@@ -44,8 +44,6 @@ internal sealed class Client
 
         _tcpTimeClient?.Close();
         _tcpTimeThread.Join();
-
-        _clientCloseServerConnectionThread.Join();
     }
 
     private static void UdpDiscoverHandler()
