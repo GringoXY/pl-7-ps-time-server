@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using System.Threading;
 
 namespace Server;
 
@@ -51,8 +52,14 @@ internal sealed class Server : IDisposable
 
         Console.CancelKeyPress += (object? sender, ConsoleCancelEventArgs e) =>
         {
-            Dispose();
+            Shutdown();
+            e.Cancel = true;
         };
+    }
+
+    public void Shutdown()
+    {
+        Dispose();
     }
 
     public void Dispose()
@@ -63,27 +70,16 @@ internal sealed class Server : IDisposable
 
         _cancellationTokenSource.Cancel();
 
-        // Sequentially Shutdown UDP Discover threads
-        foreach ((UdpDiscover udpDiscover, Thread _) in _udpDiscovers)
+        foreach ((UdpDiscover udpDiscover, Thread udpThread) in _udpDiscovers)
         {
             udpDiscover.Shutdown();
+            udpThread.Join();
         }
 
-        // Sequentially Shutdown TCP Connection threads
-        foreach ((TcpConnection tcpConnection, Thread _) in _tcpConnections)
+        foreach ((TcpConnection tcpConnection, Thread tcpThread) in _tcpConnections)
         {
             tcpConnection.Shutdown();
-        }
-
-        // Join All Threads
-        foreach ((UdpDiscover _, Thread thread) in _udpDiscovers)
-        {
-            thread.Join();
-        }
-
-        foreach ((TcpConnection _, Thread thread) in _tcpConnections)
-        {
-            thread.Join();
+            tcpThread.Join();
         }
     }
 }
