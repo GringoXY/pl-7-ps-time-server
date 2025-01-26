@@ -15,7 +15,7 @@ Make sure you conform [Requirements](#requirements) and your CLI points to the r
 dotnet run --project src\Server
 ```
 
-### Run client TODO!!!
+### Run client
 ```terminal
-dotnet run --project src\<path_to_client>
+dotnet run --project src\Client
 ```
