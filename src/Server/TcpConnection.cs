@@ -86,14 +86,13 @@ internal sealed class TcpConnection(IPAddress LocalIPAddress, int Port, Cancella
         }
         finally
         {
-            EndPoint? closedClientAddress = tcpClient?.Client?.RemoteEndPoint;
-            tcpClient?.Close();
-            _tcpClients.Remove(tcpClient, out Thread? thread);
+            string closedClientAddress = tcpClient?.Client?.RemoteEndPoint?.ToString() ?? string.Empty;
 
             Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"Client: {closedClientAddress} closed");
+            Console.WriteLine($"Client: {closedClientAddress} being closed");
             Console.ForegroundColor = ConsoleColor.Gray;
-            thread?.Join();
+
+            tcpClient?.Close();
         }
     }
 
