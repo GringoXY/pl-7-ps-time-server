@@ -8,7 +8,7 @@ namespace Server;
 
 internal sealed class TcpConnection(IPAddress LocalIPAddress, int Port, CancellationToken CancellationToken) : IDisposable
 {
-    private TcpListener _listener;
+    private TcpListener _tcpListener;
     private readonly ConcurrentDictionary<TcpClient, Thread> _tcpClients = [];
 
     public void Start()
@@ -20,12 +20,12 @@ internal sealed class TcpConnection(IPAddress LocalIPAddress, int Port, Cancella
     {
         try
         {
-            _listener = new(LocalIPAddress, Port);
-            _listener.Start();
+            _tcpListener = new(LocalIPAddress, Port);
+            _tcpListener.Start();
 
             while (CancellationToken.IsCancellationRequested == false)
             {
-                TcpClient tcpClient = _listener.AcceptTcpClient();
+                TcpClient tcpClient = _tcpListener.AcceptTcpClient();
                 EndPoint? clientRemoteEndPoint = tcpClient.Client.RemoteEndPoint;
 
                 Thread tcpClientThread = new(() => TcpClientHandler(tcpClient));
@@ -36,7 +36,6 @@ internal sealed class TcpConnection(IPAddress LocalIPAddress, int Port, Cancella
                 Console.ForegroundColor = ConsoleColor.Green;
                 Console.WriteLine($"Client: {clientRemoteEndPoint} connected");
                 Console.ForegroundColor = ConsoleColor.Gray;
-                // _clientStats.TryAdd(client.Client.RemoteEndPoint?.ToString(), ClientState.Connected);
             }
         }
         catch (ObjectDisposedException ode)
@@ -51,17 +50,13 @@ internal sealed class TcpConnection(IPAddress LocalIPAddress, int Port, Cancella
         {
             e.PrintErrorMessage($"{nameof(TcpConnection)} Server error");
         }
-        finally
-        {
-            Shutdown();
-        }
     }
 
     private void TcpClientHandler(TcpClient tcpClient)
     {
         try
         {
-            byte[] buffer = new byte[1024];
+            byte[] buffer = new byte[Config.ReceiveBufferSize];
             int bytesReceive = tcpClient.Client.Receive(buffer);
             string receiveMessage = Encoding.ASCII.GetString(buffer, 0, bytesReceive);
 
@@ -92,7 +87,6 @@ internal sealed class TcpConnection(IPAddress LocalIPAddress, int Port, Cancella
         finally
         {
             EndPoint? closedClientAddress = tcpClient?.Client?.RemoteEndPoint;
-            tcpClient?.Client?.Close();
             tcpClient?.Close();
             _tcpClients.Remove(tcpClient, out Thread? thread);
 
@@ -118,6 +112,6 @@ internal sealed class TcpConnection(IPAddress LocalIPAddress, int Port, Cancella
 
         _tcpClients.Clear();
 
-        _listener?.Stop();
+        _tcpListener?.Stop();
     }
 }

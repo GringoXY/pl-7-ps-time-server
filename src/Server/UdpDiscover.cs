@@ -67,10 +67,6 @@ internal sealed class UdpDiscover(IPAddress LocalIPAddress, int Port, Cancellati
         {
             e.PrintErrorMessage($"{nameof(UdpDiscover)} Server error");
         }
-        finally
-        {
-            Shutdown();
-        }
     }
 
     public void Shutdown()
@@ -80,6 +76,7 @@ internal sealed class UdpDiscover(IPAddress LocalIPAddress, int Port, Cancellati
 
     public void Dispose()
     {
+        _client?.DropMulticastGroup(Config.MulticastGroupIpAddress);
         _client?.Close();
     }
 }

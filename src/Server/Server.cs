@@ -6,9 +6,8 @@ using System.Net.Sockets;
 
 namespace Server;
 
-internal sealed class Server
+internal sealed class Server : IDisposable
 {
-    private static Thread _serverShutdownThread;
     private static readonly CancellationTokenSource _cancellationTokenSource = new();
 
     private static readonly ConcurrentDictionary<UdpDiscover, Thread> _udpDiscovers = [];
@@ -31,13 +30,8 @@ internal sealed class Server
             .Where(u => u.Address.AddressFamily == AddressFamily.InterNetwork)
             .Select(u => u.Address);
 
-    private static readonly ConcurrentDictionary<string, ClientState> _clientStats = [];
-
     public void Start()
     {
-        _serverShutdownThread = new(ShutdownHandler);
-        _serverShutdownThread.Start();
-
         foreach (IPAddress ipAddress in _availableIpAddresses)
         {
             int port = Utils.GetRandomTcpPort();
@@ -54,24 +48,41 @@ internal sealed class Server
 
             Console.WriteLine($"Listening on {ipAddress}:{port}");
         }
+
+        Console.CancelKeyPress += (object? sender, ConsoleCancelEventArgs e) =>
+        {
+            Dispose();
+        };
     }
 
-    private static void ShutdownHandler()
+    public void Dispose()
     {
-        Console.WriteLine($"\"{Config.ShutdownKey}\" shutdowns server");
-        while (Console.ReadKey(true).Key != Config.ShutdownKey);
+        Console.ForegroundColor = ConsoleColor.Yellow;
+        Console.WriteLine("Shutting down the server, please wait...");
+        Console.ForegroundColor = ConsoleColor.Gray;
 
         _cancellationTokenSource.Cancel();
 
-        foreach ((UdpDiscover udpDiscover, Thread thread) in _udpDiscovers)
+        // Sequentially Shutdown UDP Discover threads
+        foreach ((UdpDiscover udpDiscover, Thread _) in _udpDiscovers)
         {
             udpDiscover.Shutdown();
+        }
+
+        // Sequentially Shutdown TCP Connection threads
+        foreach ((TcpConnection tcpConnection, Thread _) in _tcpConnections)
+        {
+            tcpConnection.Shutdown();
+        }
+
+        // Join All Threads
+        foreach ((UdpDiscover _, Thread thread) in _udpDiscovers)
+        {
             thread.Join();
         }
 
-        foreach ((TcpConnection tcpConnection, Thread thread) in _tcpConnections)
+        foreach ((TcpConnection _, Thread thread) in _tcpConnections)
         {
-            tcpConnection.Shutdown();
             thread.Join();
         }
     }
