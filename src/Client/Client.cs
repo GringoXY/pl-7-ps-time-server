@@ -10,8 +10,6 @@ internal sealed class Client : IDisposable
 {
     private static readonly CancellationTokenSource _cancellationTokenSource = new();
 
-    private static OfferIPAddress _previousIpAddress;
-
     private static Task _selectServerIPAddressTask;
 
     private static UdpClient _udpOfferClient;
@@ -24,7 +22,7 @@ internal sealed class Client : IDisposable
     private static Thread _tcpTimeThread;
 
     private static int? _timeTcpRequestFrequencyInMilliseconds = null;
-    private static readonly ConcurrentBag<OfferIPAddress> _availableServerIPAddresses = [];
+    private static readonly ConcurrentDictionary<string, int> _availableServerIPAddresses = [];
 
     public void Start()
     {
@@ -59,7 +57,7 @@ internal sealed class Client : IDisposable
                 Console.WriteLine("Available servers' IP addresses:");
                 for (int i = 0; i < _availableServerIPAddresses.Count; i += 1)
                 {
-                    Console.WriteLine($"{i + 1}. {_availableServerIPAddresses.ElementAt(i)}");
+                    Console.WriteLine($"{i + 1}. {_availableServerIPAddresses.ElementAt(i).Value}");
                 }
 
                 Console.Write($"Choose IP address (1-{_availableServerIPAddresses.Count}): ");
@@ -73,24 +71,25 @@ internal sealed class Client : IDisposable
                     Console.WriteLine("Available servers' IP addresses:");
                     for (int i = 0; i < _availableServerIPAddresses.Count; i += 1)
                     {
-                        Console.WriteLine($"{i + 1}. {_availableServerIPAddresses.ElementAt(i)}");
+                        KeyValuePair<string, int> ip = _availableServerIPAddresses.ElementAt(i);
+                        Console.WriteLine($"{i + 1}. {ip.Key}:{ip.Value}");
                     }
                     Console.Write($"Invalid choice... Choose list element that exists (1-{_availableServerIPAddresses.Count}): ");
                 }
 
                 Console.Clear();
-                OfferIPAddress chosenIpAddress = _availableServerIPAddresses.ElementAt(listPoint - 1);
+                (string ipAddress, int port) = _availableServerIPAddresses.ElementAt(listPoint - 1);
 
                 try
                 {
                     // May throw exception on connection attempt
-                    _tcpTimeClient = new(chosenIpAddress.IPAddress, chosenIpAddress.Port)
+                    Console.WriteLine($"Connecting to {ipAddress}:{port}");
+                    _tcpTimeClient = new(ipAddress, port)
                     {
                         SendTimeout = Config.TcpTimeRequestTimeoutInMilliseconds
                     };
-                    _previousIpAddress = chosenIpAddress;
 
-                    Console.Write($"Provide time request frequency in ms (10-1000): ");
+                    Console.Write($"Connected! Provide time request frequency in ms (10-1000): ");
 
                     int requestFrequency = 0;
                     while (
@@ -112,6 +111,7 @@ internal sealed class Client : IDisposable
                 }
                 catch (SocketException se)
                 {
+                    _availableServerIPAddresses.TryRemove(ipAddress, out _);
                     se.PrintErrorMessage($"{nameof(SelectServerIPAddressHandler)} UDP Socket error");
                 }
                 catch (Exception e)
@@ -165,15 +165,11 @@ internal sealed class Client : IDisposable
                     if (offerResponseMessage.StartsWith(Config.OfferMessageRequest))
                     {
                         OfferIPAddress offerIpAddress = offerResponseMessage.ParseOfferMessage();
-                        if (
-                            _availableServerIPAddresses.Any(ip =>
-                                ip.IPAddress == offerIpAddress.IPAddress
-                                && ip.Port == offerIpAddress.Port
-                            ) == false
-                        )
-                        {
-                            _availableServerIPAddresses.Add(offerIpAddress);
-                        }
+                        // Removing old entry
+                        _availableServerIPAddresses.TryRemove(offerIpAddress.IPAddress, out _);
+
+                        // Adding new entry
+                        _availableServerIPAddresses.TryAdd(offerIpAddress.IPAddress, offerIpAddress.Port);
                     }
                 }
 
@@ -248,11 +244,11 @@ internal sealed class Client : IDisposable
 
     private static void TcpTimeHandler()
     {
-        try
+        while (_cancellationTokenSource.IsCancellationRequested == false)
         {
-            while (_cancellationTokenSource.IsCancellationRequested == false)
+            if (_tcpTimeClient?.Connected is true && _timeTcpRequestFrequencyInMilliseconds is not null)
             {
-                if (_tcpTimeClient?.Connected is true && _timeTcpRequestFrequencyInMilliseconds is not null)
+                try
                 {
                     // 1. Get current client time [ms]
                     long currentClientTime1 = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -284,21 +280,23 @@ internal sealed class Client : IDisposable
                         Console.ForegroundColor = ConsoleColor.Gray;
                     }
                 }
-
-                _cancellationTokenSource.Token.WaitHandle.WaitOne(_timeTcpRequestFrequencyInMilliseconds ?? 1_000);
+                catch (ObjectDisposedException ode)
+                {
+                    ode.PrintErrorMessage($"{nameof(TcpTimeHandler)} Client error");
+                }
+                catch (SocketException se)
+                {
+                    _tcpTimeClient?.Close();
+                    _timeTcpRequestFrequencyInMilliseconds = null;
+                    se.PrintErrorMessage($"{nameof(TcpTimeHandler)} Socket error");
+                }
+                catch (Exception e)
+                {
+                    e.PrintErrorMessage($"{nameof(TcpTimeHandler)} Client error");
+                }
             }
-        }
-        catch (ObjectDisposedException ode)
-        {
-            ode.PrintErrorMessage($"{nameof(TcpTimeHandler)} Client error");
-        }
-        catch (SocketException se)
-        {
-            se.PrintErrorMessage($"{nameof(TcpTimeHandler)} Socket error");
-        }
-        catch (Exception e)
-        {
-            e.PrintErrorMessage($"{nameof(TcpTimeHandler)} Client error");
+
+            _cancellationTokenSource.Token.WaitHandle.WaitOne(_timeTcpRequestFrequencyInMilliseconds ?? 1_000);
         }
     }
         
