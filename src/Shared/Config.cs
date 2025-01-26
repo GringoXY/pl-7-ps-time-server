@@ -29,6 +29,9 @@ public static class Config
     /// </summary>
     public const string TimeMessageRequest = "TIME";
 
+    /// <summary>
+    /// The multicast group to which server and client will join.
+    /// </summary>
     public static readonly IPAddress MulticastGroupIpAddress = IPAddress.Parse("239.0.0.1");
 
     /// <summary>
@@ -48,6 +51,18 @@ public static class Config
     /// in order to lower CPU usage.
     /// </summary>
     public const int TcpTimeRequestTimeoutInMilliseconds = 1_000;
+
+    /// <summary>
+    /// Sleep in milliseconds only for UDP <see cref="OfferMessageRequest"/> requests
+    /// in order to lower CPU usage.
+    /// </summary>
+    public const int UdpOfferSleepRequestInMilliseconds = 100;
+
+    /// <summary>
+    /// Sleep in milliseconds only for UDP <see cref="DiscoverMessageRequest"/> requests
+    /// in order to lower CPU usage.
+    /// </summary>
+    public const int SelectServerSleepRequestInMilliseconds = 1_000;
 
     /// <summary>
     /// Min sleep in milliseconds only for TCP <see cref="TimeMessageRequest"/> requests
