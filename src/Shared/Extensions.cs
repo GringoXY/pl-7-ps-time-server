@@ -12,10 +12,10 @@ public static class Extensions
     /// </summary>
     /// <param name="string">Response to parse</param>
     /// <returns>List of offered IP addresses</returns>
-    public static OfferIPAddress[] ParseOfferMessage(this string @string)
+    public static OfferIPAddress ParseOfferMessage(this string @string)
     {
         string json = @string.Replace(Config.OfferMessageRequest, string.Empty);
-        return JsonSerializer.Deserialize<OfferIPAddress[]>(json) ?? [];
+        return JsonSerializer.Deserialize<OfferIPAddress>(json)!;
     }
 
     public static void PrintErrorMessage(this Exception exception, string baseMessage = "")

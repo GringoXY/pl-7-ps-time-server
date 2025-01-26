@@ -1,11 +1,12 @@
 ﻿using Shared;
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
 
 namespace Client;
 
-internal sealed class Client
+internal sealed class Client : IDisposable
 {
     private static CancellationTokenSource _cancellationTokenSource = new();
     private static Thread _clientShutdownThread;
@@ -19,31 +20,20 @@ internal sealed class Client
     private static Thread _tcpTimeThread;
 
     private static int? _timeTcpRequestFrequencyInMilliseconds = null;
+    private static readonly ConcurrentBag<OfferIPAddress> _availableServerIPAddresses = [];
 
     public void Start()
     {
-        _clientShutdownThread = new(ShutdownHandler);
-        _clientShutdownThread.Start();
-
         _udpDiscoverThread = new(UdpDiscoverHandler);
         _udpDiscoverThread.Start();
 
         _tcpTimeThread = new(TcpTimeHandler);
         _tcpTimeThread.Start();
-    }
 
-    private static void ShutdownHandler()
-    {
-        Console.WriteLine($"\"{Config.ShutdownKey}\" shutdowns client");
-        while (Console.ReadKey(true).Key != Config.ShutdownKey);
-
-        _cancellationTokenSource.Cancel();
-
-        _udpDiscoverClient?.Close();
-        _udpDiscoverThread.Join();
-
-        _tcpTimeClient?.Close();
-        _tcpTimeThread.Join();
+        Console.CancelKeyPress += (object sender, ConsoleCancelEventArgs e) =>
+        {
+            Dispose();
+        };
     }
 
     private static void UdpDiscoverHandler()
@@ -70,10 +60,7 @@ internal sealed class Client
             _udpDiscoverClient.JoinMulticastGroup(Config.MulticastGroupIpAddress, localIpAddress);
 
             _udpDiscoverClient.Client.Bind(localEndPoint);
-
             IPEndPoint multicastEndPoint = new(Config.MulticastGroupIpAddress, Config.UdpDiscoverPort);
-
-            Console.WriteLine($"Started UDP multicast {Config.DiscoverMessageRequest}: {multicastEndPoint.Address}");
 
             byte[] discoverMessage = Encoding.ASCII.GetBytes(Config.DiscoverMessageRequest);
 
@@ -81,37 +68,60 @@ internal sealed class Client
             {
                 if (_tcpTimeClient?.Connected is null or false)
                 {
+                    IPEndPoint remoteEndPoint = new(localIpAddress, Config.UdpDiscoverPort);
+                    Console.WriteLine($"Sending {Config.DiscoverMessageRequest} request to {multicastEndPoint.Address}:{multicastEndPoint.Port}");
                     _udpDiscoverClient.Send(discoverMessage, discoverMessage.Length, multicastEndPoint);
 
-                    byte[] offerReceiveBytes = _udpDiscoverClient.Receive(ref multicastEndPoint);
+                    byte[] offerReceiveBytes = new byte[Config.ReceiveBufferSize];
+                    try
+                    {
+                        offerReceiveBytes = _udpDiscoverClient.Receive(ref remoteEndPoint);
+                    }
+                    catch (SocketException se)
+                    {
+                        se.PrintErrorMessage($"{nameof(UdpDiscoverHandler)}");
+
+                        continue;
+                    }
+
                     string offerResponseMessage = Encoding.ASCII.GetString(offerReceiveBytes);
                     if (offerResponseMessage.StartsWith(Config.OfferMessageRequest))
                     {
-                        OfferIPAddress[] offerIpAddress = offerResponseMessage.ParseOfferMessage();
-                        Console.WriteLine("Available IP addresses:");
-                        for (int i = 0; i < offerIpAddress.Length; i += 1)
+                        OfferIPAddress offerIpAddress = offerResponseMessage.ParseOfferMessage();
+                        if (
+                            _availableServerIPAddresses.Any(ip =>
+                                ip.IPAddress == offerIpAddress.IPAddress
+                                && ip.Port == offerIpAddress.Port
+                            ) == false
+                        )
                         {
-                            Console.WriteLine($"{i + 1}. {offerIpAddress[i]}");
+                            _availableServerIPAddresses.Add(offerIpAddress);
                         }
 
-                        Console.Write($"Choose IP address (1-{offerIpAddress.Length}): ");
+                        Console.WriteLine("Available IP addresses:");
+                        for (int i = 0; i < _availableServerIPAddresses.Count; i += 1)
+                        {
+                            Console.WriteLine($"{i + 1}. {_availableServerIPAddresses.ElementAt(i)}");
+                        }
+
+                        Console.Write($"Choose IP address (1-{_availableServerIPAddresses.Count}): ");
                         int listPoint = -1;
                         while (
                             int.TryParse(Console.ReadLine(), out listPoint) == false
                             || listPoint < 1
-                            || listPoint > offerIpAddress.Length
+                            || listPoint > _availableServerIPAddresses.Count
                         )
                         {
-                            Console.Write($"Invalid choice... Choose IP address (1-{offerIpAddress.Length}): ");
+                            Console.Write($"Invalid choice... Choose IP address (1-{_availableServerIPAddresses.Count}): ");
                         }
 
                         Console.Clear();
-                        OfferIPAddress chosenIpAddress = offerIpAddress[listPoint - 1];
+                        OfferIPAddress chosenIpAddress = _availableServerIPAddresses.ElementAt(listPoint - 1);
 
                         try
                         {
                             // May throw exception on connection attempt
-                            _tcpTimeClient = new(chosenIpAddress.IPAddress, chosenIpAddress.Port)
+                             _tcpTimeClient = new(chosenIpAddress.IPAddress, chosenIpAddress.Port)
                             {
                                 SendTimeout = Config.TcpTimeRequestTimeoutInMilliseconds
                             };
@@ -130,6 +140,8 @@ internal sealed class Client
                             }
 
                             _timeTcpRequestFrequencyInMilliseconds = requestFrequency;
+
+                            Console.Clear();
                         }
                         catch (ObjectDisposedException ode)
                         {
@@ -147,7 +159,7 @@ internal sealed class Client
                 }
 
                 // Preventing overusage of the CPU
-                Thread.Sleep(Config.UdpDiscoverSleepRequestInMilliseconds);
+                _cancellationTokenSource.Token.WaitHandle.WaitOne(Config.UdpDiscoverSleepRequestInMilliseconds);
             }
         }
         catch (ObjectDisposedException ode)
@@ -183,7 +195,7 @@ internal sealed class Client
                     byte[] serverTimeRequest = Encoding.ASCII.GetBytes(Config.TimeMessageRequest);
                     _tcpTimeClient.Client.Send(serverTimeRequest);
 
-                    byte[] buffer = new byte[256];
+                    byte[] buffer = new byte[Config.ReceiveBufferSize];
                     int receiveServerResponseBytes = _tcpTimeClient.Client.Receive(buffer);
                     string serverUnixTimeInMilliseconds = Encoding.ASCII.GetString(buffer, 0, receiveServerResponseBytes);
 
@@ -207,7 +219,7 @@ internal sealed class Client
                     }
                 }
 
-                Thread.Sleep(_timeTcpRequestFrequencyInMilliseconds ?? 1_000);
+                _cancellationTokenSource.Token.WaitHandle.WaitOne(_timeTcpRequestFrequencyInMilliseconds ?? 1_000);
             }
         }
         catch (ObjectDisposedException ode)
@@ -225,6 +237,21 @@ internal sealed class Client
         finally
         {
             _tcpTimeClient?.Close();
+            _availableServerIPAddresses.Clear();
         }
+    }
+        
+    public void Dispose()
+    {
+        Console.ForegroundColor = ConsoleColor.Yellow;
+        Console.WriteLine("Shutting down the client. Please wait...");
+        Console.ForegroundColor = ConsoleColor.Gray;
+        _cancellationTokenSource.Cancel();
+
+        _udpDiscoverClient?.Close();
+        _udpDiscoverThread.Join();
+
+        _tcpTimeClient?.Close();
+        _tcpTimeThread.Join();
     }
 }

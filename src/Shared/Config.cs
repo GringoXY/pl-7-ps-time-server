@@ -22,12 +22,14 @@ public static class Config
     /// </summary>
     public const string OfferMessageRequest = "OFFER";
 
+    public const int ReceiveBufferSize = 1_024;
+
     /// <summary>
     /// Command/request name for the client when he requests server's time
     /// </summary>
     public const string TimeMessageRequest = "TIME";
 
-    public static readonly IPAddress MulticastGroupIpAddress = IPAddress.Parse("239.0.0.0");
+    public static readonly IPAddress MulticastGroupIpAddress = IPAddress.Parse("239.0.0.1");
 
     /// <summary>
     /// Sleep in milliseconds only for UDP <see cref="DiscoverMessageRequest"/> requests
@@ -39,13 +41,13 @@ public static class Config
     /// Sleep in milliseconds only for UDP <see cref="DiscoverMessageRequest"/> requests
     /// in order to lower CPU usage.
     /// </summary>
-    public const int UdpDiscoverTimeoutRequestInMilliseconds = 10_000;
+    public const int UdpDiscoverTimeoutRequestInMilliseconds = 1_000;
 
     /// <summary>
     /// Sleep in milliseconds only for TCP <see cref="TimeMessageRequest"/> requests
     /// in order to lower CPU usage.
     /// </summary>
-    public const int TcpTimeRequestTimeoutInMilliseconds = 10_000;
+    public const int TcpTimeRequestTimeoutInMilliseconds = 1_000;
 
     /// <summary>
     /// Min sleep in milliseconds only for TCP <see cref="TimeMessageRequest"/> requests
@@ -58,6 +60,4 @@ public static class Config
     /// in order to lower CPU usage.
     /// </summary>
     public const int MaxTcpTimeRequestFrequencyInMilliseconds = 1_000;
-
-    public const ConsoleKey ShutdownKey = ConsoleKey.Q;
 }
