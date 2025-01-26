@@ -26,6 +26,7 @@ internal sealed class Client : IDisposable
 
     public void Start()
     {
+        Cache.LoadCachedIPAddress();
         _selectServerIPAddressTask = new(SelectServerIPAddressHandler, _cancellationTokenSource.Token);
         _selectServerIPAddressTask.Start();
 
@@ -54,30 +55,49 @@ internal sealed class Client : IDisposable
 
             if (_tcpTimeClient?.Connected is null or false)
             {
+                int defaultIndex = -1, listPoint = -1;
+
                 Console.WriteLine("Available servers' IP addresses:");
                 for (int i = 0; i < _availableServerIPAddresses.Count; i += 1)
                 {
-                    Console.WriteLine($"{i + 1}. {_availableServerIPAddresses.ElementAt(i).Value}");
-                }
-
-                Console.Write($"Choose IP address (1-{_availableServerIPAddresses.Count}): ");
-                int listPoint = -1;
-                while (
-                    int.TryParse(Console.ReadLine(), out listPoint) == false
-                    || listPoint < 1
-                    || listPoint > _availableServerIPAddresses.Count
-                )
-                {
-                    Console.WriteLine("Available servers' IP addresses:");
-                    for (int i = 0; i < _availableServerIPAddresses.Count; i += 1)
+                    KeyValuePair<string, int> ip = _availableServerIPAddresses.ElementAt(i);
+                    if (Cache.PreviousIPAddress == ip.Key)
                     {
-                        KeyValuePair<string, int> ip = _availableServerIPAddresses.ElementAt(i);
-                        Console.WriteLine($"{i + 1}. {ip.Key}:{ip.Value}");
+                        defaultIndex = i + 1; // Store index of default IP
+                        Console.ForegroundColor = ConsoleColor.Yellow;
+                        Console.WriteLine($"{i + 1}. {ip.Value} (default) - press \"ENTER\" to proceed");
+                        Console.ForegroundColor = ConsoleColor.Gray;
                     }
-                    Console.Write($"Invalid choice... Choose list element that exists (1-{_availableServerIPAddresses.Count}): ");
+                    else
+                    {
+                        Console.WriteLine($"{i + 1}. {ip.Value}");
+                    }
                 }
 
-                Console.Clear();
+                Console.Write($"Choose IP address (1-{_availableServerIPAddresses.Count})");
+                if (defaultIndex != -1) Console.Write(" or press \"ENTER\" for default: ");
+                else Console.Write(": ");
+
+                string input = Console.ReadLine();
+                if (defaultIndex != -1 && string.IsNullOrEmpty(input))
+                {
+                    listPoint = defaultIndex;
+                }
+                else
+                {
+                    while (
+                        !int.TryParse(input, out listPoint)
+                        || listPoint < 1
+                        || listPoint > _availableServerIPAddresses.Count
+                    )
+                    {
+                        Console.WriteLine("Invalid choice... Please try again:");
+                        input = Console.ReadLine();
+
+                        Console.Clear();
+                    }
+                }
+
                 (string ipAddress, int port) = _availableServerIPAddresses.ElementAt(listPoint - 1);
 
                 try
@@ -88,6 +108,8 @@ internal sealed class Client : IDisposable
                     {
                         SendTimeout = Config.TcpTimeRequestTimeoutInMilliseconds
                     };
+
+                    Cache.SaveIPAddress(ipAddress);
 
                     Console.Write($"Connected! Provide time request frequency in ms (10-1000): ");
 
