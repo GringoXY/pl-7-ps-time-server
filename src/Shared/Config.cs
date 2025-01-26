@@ -41,12 +41,6 @@ public static class Config
     public const int UdpDiscoverSleepRequestInMilliseconds = 10_000;
 
     /// <summary>
-    /// Sleep in milliseconds only for UDP <see cref="DiscoverMessageRequest"/> requests
-    /// in order to lower CPU usage.
-    /// </summary>
-    public const int UdpDiscoverTimeoutRequestInMilliseconds = 1_000;
-
-    /// <summary>
     /// Sleep in milliseconds only for TCP <see cref="TimeMessageRequest"/> requests
     /// in order to lower CPU usage.
     /// </summary>

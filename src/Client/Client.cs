@@ -12,7 +12,7 @@ internal sealed class Client : IDisposable
 
     private static OfferIPAddress _previousIpAddress;
 
-    private static Thread _selectServerIPAddress;
+    private static Task _selectServerIPAddressTask;
 
     private static UdpClient _udpOfferClient;
     private static Thread _udpOfferThread;
@@ -28,8 +28,8 @@ internal sealed class Client : IDisposable
 
     public void Start()
     {
-        _selectServerIPAddress = new(SelectServerIPAddressHandler);
-        _selectServerIPAddress.Start();
+        _selectServerIPAddressTask = new(SelectServerIPAddressHandler, _cancellationTokenSource.Token);
+        _selectServerIPAddressTask.Start();
 
         _udpOfferThread = new(UdpOfferHandler);
         _udpOfferThread.Start();
@@ -43,6 +43,7 @@ internal sealed class Client : IDisposable
         Console.CancelKeyPress += (object? sender, ConsoleCancelEventArgs e) =>
         {
             Dispose();
+            e.Cancel = true;
         };
     }
 
@@ -127,10 +128,6 @@ internal sealed class Client : IDisposable
         {
             _udpOfferClient = new()
             {
-                Client =
-                {
-                    ReceiveTimeout = Config.UdpDiscoverTimeoutRequestInMilliseconds,
-                },
                 ExclusiveAddressUse = false,
                 MulticastLoopback = false,
             };
@@ -186,20 +183,15 @@ internal sealed class Client : IDisposable
         }
         catch (ObjectDisposedException ode)
         {
-            ode.PrintErrorMessage($"{nameof(UdpDiscoverHandler)} Client error");
+            ode.PrintErrorMessage($"{nameof(UdpOfferHandler)} Client error");
         }
         catch (SocketException se)
         {
-            se.PrintErrorMessage($"{nameof(UdpDiscoverHandler)} Socket error");
+            se.PrintErrorMessage($"{nameof(UdpOfferHandler)} Socket error");
         }
         catch (Exception e)
         {
-            e.PrintErrorMessage($"{nameof(UdpDiscoverHandler)} Client error");
-        }
-        finally
-        {
-            _udpOfferClient?.DropMulticastGroup(Config.MulticastGroupIpAddress);
-            _udpOfferClient?.Close();
+            e.PrintErrorMessage($"{nameof(UdpOfferHandler)} Client error");
         }
     }
 
@@ -209,10 +201,6 @@ internal sealed class Client : IDisposable
         {
             _udpDiscoverClient = new()
             {
-                Client =
-                {
-                    ReceiveTimeout = Config.UdpDiscoverTimeoutRequestInMilliseconds,
-                },
                 ExclusiveAddressUse = false,
                 MulticastLoopback = false,
             };
@@ -255,11 +243,6 @@ internal sealed class Client : IDisposable
         catch (Exception e)
         {
             e.PrintErrorMessage($"{nameof(UdpDiscoverHandler)} Client error");
-        }
-        finally
-        {
-            _udpDiscoverClient?.DropMulticastGroup(Config.MulticastGroupIpAddress);
-            _udpDiscoverClient?.Close();
         }
     }
 
@@ -317,11 +300,6 @@ internal sealed class Client : IDisposable
         {
             e.PrintErrorMessage($"{nameof(TcpTimeHandler)} Client error");
         }
-        finally
-        {
-            _tcpTimeClient?.Close();
-            _availableServerIPAddresses.Clear();
-        }
     }
         
     public void Dispose()
@@ -332,15 +310,16 @@ internal sealed class Client : IDisposable
 
         _cancellationTokenSource.Cancel();
 
-        _selectServerIPAddress.Join();
+        _availableServerIPAddresses.Clear();
 
+        _udpOfferClient?.DropMulticastGroup(Config.MulticastGroupIpAddress);
         _udpOfferClient?.Close();
-        _udpDiscoverThread.Join();
-
+        _udpDiscoverClient?.DropMulticastGroup(Config.MulticastGroupIpAddress);
         _udpDiscoverClient?.Close();
-        _udpDiscoverThread.Join();
-
         _tcpTimeClient?.Close();
+
+        _udpOfferThread.Join();
+        _udpDiscoverThread.Join();
         _tcpTimeThread.Join();
     }
 }
