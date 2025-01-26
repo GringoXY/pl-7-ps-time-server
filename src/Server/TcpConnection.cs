@@ -34,7 +34,7 @@ internal sealed class TcpConnection(IPAddress LocalIPAddress, int Port, Cancella
                 _tcpClients.TryAdd(tcpClient, tcpClientThread);
 
                 Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine($"Client connected {clientRemoteEndPoint}");
+                Console.WriteLine($"Client: {clientRemoteEndPoint} connected");
                 Console.ForegroundColor = ConsoleColor.Gray;
                 // _clientStats.TryAdd(client.Client.RemoteEndPoint?.ToString(), ClientState.Connected);
             }
@@ -91,9 +91,14 @@ internal sealed class TcpConnection(IPAddress LocalIPAddress, int Port, Cancella
         }
         finally
         {
-            tcpClient.Client.Close();
-            tcpClient.Close();
+            EndPoint? closedClientAddress = tcpClient?.Client?.RemoteEndPoint;
+            tcpClient?.Client?.Close();
+            tcpClient?.Close();
             _tcpClients.Remove(tcpClient, out Thread? thread);
+
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"Client: {closedClientAddress} closed");
+            Console.ForegroundColor = ConsoleColor.Gray;
             thread?.Join();
         }
     }

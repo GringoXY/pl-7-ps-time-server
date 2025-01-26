@@ -30,27 +30,28 @@ internal sealed class UdpDiscover(IPAddress LocalIPAddress, int Port, Cancellati
                 true);
 
             IPEndPoint localEndPoint = new(LocalIPAddress, Config.UdpDiscoverPort);
-            _client.JoinMulticastGroup(Config.MulticastGroupIpAddress, LocalIPAddress);
-
             _client.Client.Bind(localEndPoint);
 
-            IPEndPoint multicastEndPoint = new(Config.MulticastGroupIpAddress, Config.UdpDiscoverPort);
+            _client.JoinMulticastGroup(Config.MulticastGroupIpAddress, LocalIPAddress);
 
             while (CancellationToken.IsCancellationRequested == false)
             {
-                byte[] receivedBytes = _client.Receive(ref multicastEndPoint);
+                IPEndPoint multicastEndPoint = new(Config.MulticastGroupIpAddress, Config.UdpDiscoverPort);
+                Console.WriteLine($"Waiting for {Config.DiscoverMessageRequest} receive via {multicastEndPoint.Address}:{multicastEndPoint.Port} on network interface with IP {localEndPoint}");
+                IPEndPoint remoteEndPoint = new(LocalIPAddress, Config.UdpDiscoverPort);
+                byte[] receivedBytes = _client.Receive(ref remoteEndPoint);
                 string receivedMessage = Encoding.ASCII.GetString(receivedBytes);
 
                 if (receivedMessage.Clear().Equals(Config.DiscoverMessageRequest, StringComparison.CurrentCultureIgnoreCase))
                 {
-                    OfferIPAddress offerIpAddresses = new(LocalIPAddress.ToString(), Port);
+                    OfferIPAddress offerIpAddress = new(LocalIPAddress.ToString(), Port);
 
-                    string offerMessage = $"{Config.OfferMessageRequest}{JsonSerializer.Serialize(offerIpAddresses)}";
+                    string offerMessage = $"{Config.OfferMessageRequest}{JsonSerializer.Serialize(offerIpAddress)}";
                     byte[] offerBytes = Encoding.ASCII.GetBytes(offerMessage);
 
                     _client.Send(offerBytes, offerBytes.Length, multicastEndPoint);
 
-                    Console.WriteLine($"Sent {Config.OfferMessageRequest} to {multicastEndPoint}");
+                    Console.WriteLine($"Sent {Config.OfferMessageRequest}: {offerIpAddress} to {multicastEndPoint}");
                 }
             }
         }
